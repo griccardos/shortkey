@@ -1,7 +1,14 @@
-# Tauri + React + Typescript
+# Shortkey
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Limit the use of the mouse, but using keyboard shortcuts to access points of interest on the screen. This application allows you to click button like elements on the screen using a shortcut without having to use the mouse for that one click.
 
-## Recommended IDE Setup
+Similar to using alt to access the menu bar, this application allows you to access other elements on the screen using a shortcut.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+Useful for people with conditions that prevent full use of the mouse.
+
+## Getting Started
+Default shortcut is `alt+enter` to open the application.
+Select elements with `arrow keys` or `space+j/k`
+Press `enter` to click the selected element.
+Press `ctrl+enter` to right click the selected element.
+
