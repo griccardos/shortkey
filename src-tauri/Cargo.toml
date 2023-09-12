@@ -1,0 +1,36 @@
+[package]
+name = "shortkey"
+version = "0.0.0"
+description = "A Tauri App"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1.4", features = [] }
+
+[dependencies]
+tauri = { version = "1.4", features = ["global-shortcut-all", "shell-open", "system-tray"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+fuzzy-matcher ="0"#to match 
+easier="0"#for to_vec
+active-win-pos-rs = "0.8" #for active window
+
+[target.'cfg(windows)'.dependencies]
+uiautomation = "0" #windows 
+
+[target.'cfg(osx)'.dependencies]
+accessibility="0" #macos
+macos-accessibility-client="0" #macos
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

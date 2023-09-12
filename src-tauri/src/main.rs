@@ -1,0 +1,328 @@
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod traits;
+#[cfg(target_os = "windows")]
+mod windows;
+//#[cfg(target_os = "osx")]
+mod mac;
+
+use easier::prelude::*;
+use std::{
+    collections::HashSet,
+    sync::{
+        mpsc::{Receiver, Sender},
+        Mutex,
+    },
+    time::Duration,
+};
+
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use serde::{Deserialize, Serialize};
+use tauri::{
+    AppHandle, CustomMenuItem, Manager, PhysicalPosition, PhysicalSize, Position, Size, State,
+    SystemTray, SystemTrayEvent, SystemTrayMenu, Window,
+};
+use traits::{AccessibilityCalls, Action, UiElement};
+
+struct AppState {
+    input: String,
+    results: Vec<String>,
+    sender: Sender<Message>,
+}
+
+fn main() {
+    let tray = setup_system_tray();
+
+    let (sender, rec) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        worker(rec);
+    });
+    let state = AppState {
+        input: "".to_string(),
+        results: vec![],
+        sender,
+    };
+    tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![update_input, choice, hide, show])
+        .manage(Mutex::new(state))
+        .system_tray(tray)
+        .on_system_tray_event(handle_system_tray) // <- handling the system tray events
+        .setup(|app| {
+            let state: State<Mutex<AppState>> = app.state();
+            let window = app.get_window("main").unwrap();
+            set_size(&window);
+
+            let state = state.lock().unwrap();
+            state
+                .sender
+                .send(Message::AppHandle(app.app_handle()))
+                .unwrap();
+
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+fn setup_system_tray() -> SystemTray {
+    let quit = CustomMenuItem::new("quit".to_string(), "Quit");
+    let tray_menu = SystemTrayMenu::new().add_item(quit);
+    SystemTray::new().with_menu(tray_menu)
+}
+
+fn handle_system_tray(app: &tauri::AppHandle, event: tauri::SystemTrayEvent) {
+    match event {
+        SystemTrayEvent::LeftClick { .. } => toggle_window(app),
+        SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+            "quit" => app.exit(0),
+            "toggle" => toggle_window(app),
+            _ => {}
+        },
+        _ => {}
+    }
+}
+
+fn toggle_window(app: &tauri::AppHandle) {
+    let window = app.get_window("main").unwrap();
+    if window.is_visible().unwrap() {
+        window.hide().unwrap();
+    } else {
+        window.show().unwrap();
+        window.unminimize().unwrap();
+        window.set_focus().unwrap();
+    }
+}
+#[tauri::command]
+fn update_input(input: &str, state: tauri::State<Mutex<AppState>>) {
+    state.lock().unwrap().input = input.to_string();
+    state.lock().unwrap().results = vec![];
+    let res = state
+        .lock()
+        .unwrap()
+        .sender
+        .send(Message::UpdateInput(input.to_string()));
+    if let Err(e) = res {
+        eprintln!("error sending message: {:?}", e);
+    }
+}
+
+impl From<&str> for Action {
+    fn from(s: &str) -> Self {
+        match s {
+            "LeftClick" => Action::LeftClick,
+            "RightClick" => Action::RightClick,
+            _ => Action::LeftClick,
+        }
+    }
+}
+
+#[tauri::command]
+fn choice(choice: &str, action: &str, state: tauri::State<Mutex<AppState>>, app: AppHandle) {
+    let state = state.lock().unwrap();
+
+    println!("choice:{choice}");
+    let res = state
+        .sender
+        .send(Message::Invoke(choice.to_string(), action.into()));
+    if let Err(e) = res {
+        eprintln!("error sending message: {:?}", e);
+    }
+    app.get_window("main").unwrap().hide().unwrap();
+}
+
+#[tauri::command]
+fn hide(app: AppHandle) {
+    app.get_window("main").unwrap().hide().unwrap();
+}
+
+#[tauri::command]
+fn show(state: tauri::State<Mutex<AppState>>, app: AppHandle) {
+    app.emit_all("show", ()).unwrap();
+    let state = state.lock().unwrap();
+    state.sender.send(Message::SaveTopmost).unwrap();
+    std::thread::sleep(Duration::from_millis(100)); //wait to get topmost to finish
+    let window = app.get_window("main").unwrap();
+    set_size(&window);
+    window.show().unwrap();
+
+    window.set_focus().unwrap();
+    state.sender.send(Message::RequestHints).unwrap();
+}
+
+fn set_size(window: &Window) {
+    let monitor = window.current_monitor().unwrap().unwrap();
+    let size = monitor.size();
+    window
+        .set_size(Size::Physical(PhysicalSize {
+            width: size.width,
+            height: size.height,
+        }))
+        .unwrap();
+    window
+        .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
+        .unwrap();
+}
+
+enum Message {
+    AppHandle(AppHandle),
+    UpdateInput(String),
+    RequestHints,
+    Invoke(String, Action),
+    SaveTopmost,
+}
+fn create_hints(elements: &[UiElement]) -> Vec<Hint> {
+    let mut index = HashSet::new();
+    let hints: Vec<Hint> = elements
+        .iter()
+        .take(600) //hard limit (which is less than 26*26 or 2 chars)
+        .map(|e| e.into())
+        .map(|e: Hint| {
+            let mut e = e;
+            let chars = e.text.chars().filter(|a| a.is_alphabetic()).to_vec();
+            let one = chars.iter().take(1).collect::<String>().to_uppercase();
+            let two = chars.iter().take(2).collect::<String>().to_uppercase();
+
+            if one.len() > 0 && !index.contains(&one) {
+                e.hint = one.clone();
+                index.insert(one);
+                return e;
+            }
+            //go through each of the letters, and return the first one that isn't in the index
+            for c in 'A'..'Z' {
+                if !index.contains(&c.to_string()) {
+                    e.hint = c.to_string();
+                    index.insert(c.to_string());
+                    return e;
+                }
+            }
+            //else try 2
+            if two.len() > 0 && !index.contains(&two) {
+                e.hint = two.clone();
+                index.insert(two);
+                return e;
+            }
+            //go through every combination of 2 letters
+            for c1 in 'A'..'Z' {
+                for c2 in 'A'..'Z' {
+                    let s = format!("{}{}", c1, c2);
+                    if !index.contains(&s) {
+                        e.hint = s.clone();
+                        index.insert(s);
+                        return e;
+                    }
+                }
+            }
+            //should not arrive here
+            unreachable!("should be less than 26*26 elements");
+        })
+        .collect();
+    hints
+}
+fn worker(rec: Receiver<Message>) {
+    let mut app = None;
+    let mut auto = get_accessibility();
+    let mut hints: Vec<Hint> = vec![];
+    let mut elements: Vec<UiElement> = vec![];
+    loop {
+        if let Ok(msg) = rec.recv() {
+            match msg {
+                Message::AppHandle(ah) => app = Some(ah),
+                Message::UpdateInput(inp) => {
+                    let app = app.as_ref().unwrap();
+                    let matches = do_matching(&hints, inp);
+                    println!("matches: {}", matches.len());
+                    app.emit_all("update_results", matches).unwrap();
+                }
+                Message::RequestHints => {
+                    elements = auto.get_elements();
+                    hints = create_hints(&elements);
+                    let app = app.as_ref().unwrap();
+                    app.emit_all("update_results", hints.iter().collect::<Vec<&Hint>>())
+                        .unwrap();
+                }
+                Message::Invoke(hid, action) => {
+                    println!("searching for {}", hid);
+                    if let Some(hindex) = hints.iter().position(|h| h.hint == hid) {
+                        let ele = &elements[hindex];
+                        auto.invoke(ele, action);
+                    } else {
+                        println!(
+                            "no hint found for {} in {:?}",
+                            hid,
+                            hints.iter().map(|a| a.hint.clone()).collect::<Vec<_>>()
+                        );
+                    }
+                }
+                Message::SaveTopmost => auto.save_topmost(),
+            }
+        }
+    }
+}
+
+fn get_accessibility() -> impl AccessibilityCalls {
+    #[cfg(target_os = "macos")]
+    return mac::Osx::new();
+    #[cfg(target_os = "windows")]
+    return windows::Windows::new();
+}
+
+///exact hints first, then fuzzy
+fn do_matching(hints: &Vec<Hint>, inp: String) -> Vec<&Hint> {
+    if inp.is_empty() {
+        return hints.iter().to_vec();
+    }
+    let matcher = SkimMatcherV2::default();
+    //get 1 or 0 exact matches
+    let exact_hints = hints
+        .iter()
+        .filter(|h| h.hint == inp.to_uppercase())
+        .map(|a| &a.hint)
+        .to_hashset();
+    let exact = hints
+        .iter()
+        .filter(|h| exact_hints.contains(&h.hint))
+        .to_vec();
+
+    let mut matches = hints
+        .iter()
+        .filter(|a| !exact_hints.contains(&a.hint))
+        .map(|h| (h, matcher.fuzzy_match(&h.text, &inp).unwrap_or_default()))
+        .filter(|(_, score)| *score > 0)
+        .to_vec();
+    matches.sort_by(|a, b| b.1.cmp(&a.1));
+    let sorted = matches.iter().filter(|a| a.1 > 0).map(|a| a.0).to_vec();
+    //matching
+    // println!(
+    //     "exact: {:?} then {} others. min {} med{} max{}",
+    //     exact,
+    //     sorted.len(),
+    //     matches[0].1,
+    //     matches[matches.len() / 2].1,
+    //     matches[matches.len() - 1].1
+    // );
+    exact.into_iter().chain(sorted).collect()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Hint {
+    text: String,
+    hint: String,
+    x: i32,
+    y: i32,
+    control: String,
+    parent: String,
+}
+
+impl From<&UiElement> for Hint {
+    fn from(e: &UiElement) -> Self {
+        Hint {
+            text: e.name.to_string(),
+            hint: String::new(),
+            x: e.x,
+            y: e.y,
+            control: e.control.clone(),
+            parent: e.parent.clone(),
+        }
+    }
+}
