@@ -7,8 +7,8 @@ Similar to using alt to access the menu bar, this application allows you to acce
 Useful for people with conditions that prevent full use of the mouse.
 
 ## Getting Started
-Default shortcut is `alt+enter` to open the application.
-Select elements with `arrow keys` or `space+j/k`
-Press `enter` to click the selected element.
-Press `ctrl+enter` to right click the selected element.
+Default shortcut is `alt+enter` to open the application  
+Select elements with `arrow keys` or `space+j/k`  
+Press `enter` to click the selected element  
+Press `ctrl+enter` to right click the selected element  
 

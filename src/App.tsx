@@ -136,7 +136,7 @@ function App() {
           autoFocus={true}
           onChange={(e) => update_input(e.currentTarget.value)}
           value={input}
-          placeholder="Search for elements and commands"
+          placeholder="Search for element names or hint shortcut"
           onKeyDown={(e) => input_keydown(e)}
           onKeyUp={(e) => input_keyup(e)}
           onBlur={() => inputBox.current?.focus()}
@@ -149,7 +149,7 @@ function App() {
             {results.map((result, i) => {
 
               return (
-                <div className={i === selectedIndex ? "result result-selected" : "result"}><div className="result-left">{result.text} ({result.hint})</div><div className="result-right">{result.parent} | {result.control}</div></div>
+                <div className={i === selectedIndex ? "result result-selected" : "result"}><div className="result-left">{result.text} ({result.hint})</div><div className="result-right">{result.parent=="taskbar"?"taskbar | ":""}{result.control}</div></div>
               );
             })}
           </div>}
