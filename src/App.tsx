@@ -142,7 +142,7 @@ function App() {
           onBlur={() => inputBox.current?.focus()}
           ref={inputBox}
         />
-        <label className="input-label">Press <a className="highlight">Enter</a> to left click, <a className="highlight">Ctrl+Enter</a> to right click. Hold <a className="highlight">Space+J/K</a> or <a className="highlight">Down/Up</a> to scroll.<span style={{ marginLeft: '10px' }}>{finding?"Finding...":"Found " +results.length}</span></label>
+        <label className="input-label">Press <a className="highlight">Enter</a> to left click, <a className="highlight">Ctrl+Enter</a> to right click. Hold <a className="highlight">Space+J/K</a> or <a className="highlight">Down/Up</a> to scroll.<span style={{ marginLeft: '10px' }}>{finding?<div className="loader"></div>:"Found " +results.length}</span></label>
 
         {results.length > 0 &&
           <div className="holder">
