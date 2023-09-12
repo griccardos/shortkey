@@ -2668,6 +2668,7 @@ version = "0.0.0"
 dependencies = [
  "accessibility",
  "active-win-pos-rs",
+ "core-foundation",
  "easier",
  "fuzzy-matcher",
  "macos-accessibility-client",

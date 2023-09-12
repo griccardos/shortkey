@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 pub trait AccessibilityCalls {
+    ///check if has permissions
+    fn has_permissions(&self) -> bool;
     ///get the elements which we can click on
     fn get_elements(&self) -> Vec<UiElement>;
     ///do the click event

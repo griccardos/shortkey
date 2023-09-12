@@ -1,11 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod traits;
+#[cfg(target_os = "macos")]
+mod mac;
 #[cfg(target_os = "windows")]
 mod windows;
-//#[cfg(target_os = "osx")]
-mod mac;
+
+mod traits;
 
 use easier::prelude::*;
 use std::{
@@ -222,6 +223,7 @@ fn create_hints(elements: &[UiElement]) -> Vec<Hint> {
 fn worker(rec: Receiver<Message>) {
     let mut app = None;
     let mut auto = get_accessibility();
+    auto.has_permissions();
     let mut hints: Vec<Hint> = vec![];
     let mut elements: Vec<UiElement> = vec![];
     loop {
