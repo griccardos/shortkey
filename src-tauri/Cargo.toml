@@ -27,6 +27,7 @@ uiautomation = "0" #windows
 accessibility="0" #get elements
 macos-accessibility-client="0" #test if have accessibility
 core-foundation = "0.9" #for cfstring etc.
+sysinfo="0.29"#to get child ids of process
 
 [profile.dev.package."*"]
 opt-level = 3

@@ -1,3 +1,5 @@
+use std::path::Display;
+
 use serde::{Deserialize, Serialize};
 
 pub trait AccessibilityCalls {
@@ -29,4 +31,6 @@ pub struct UiElement {
     pub class: String,
     pub pid: i32,
     pub parent: String,
+    pub x_offset: i32,
+    pub y_offset: i32,
 }

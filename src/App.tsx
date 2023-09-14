@@ -13,6 +13,8 @@ type Hint = {
   text: string;
   x: number;
   y: number;
+  x_offset:number;
+  y_offset:number;
   hint: string;
   control: string;
   parent: string;
@@ -29,7 +31,8 @@ function App() {
   const inputArea = useRef<HTMLDivElement>(null);
   const inputBox = useRef<HTMLInputElement>(null);
 
-  async function invoke_hide() {
+  async function invoke_hide_and_clear() {
+    console.log("invoking hide");
     await invoke("hide");
     setResults([]);
     setInput("");
@@ -38,7 +41,7 @@ function App() {
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (inputArea.current && !inputArea.current.contains(event.target as Node)) {
-        invoke_hide();
+        invoke_hide_and_clear();
       }
     }
 
@@ -57,7 +60,7 @@ function App() {
   });
 
   listen("show", (_) => {
-   setFinding(true);
+    setFinding(true);
   });
 
   async function update_input(newValue: string) {
@@ -66,25 +69,26 @@ function App() {
     await invoke("update_input", { input: newValue });
   }
 
-    async function invoke_choice(action:string) {
-      
-      var hint=results[selectedIndex].hint;
-      switch (action) {
-        case "LeftClick":
-          await invoke_hide();
-          await invoke("choice", { choice: hint,action:"LeftClick" });
-      break;
-        case "RightClick":
-          await invoke_hide();
-          await invoke("choice", { choice: hint,action:"RightClick" });
-          break;
-       
+  async function invoke_choice(action: string) {
+
+    var hint = results[selectedIndex].hint;
+
+    await invoke_hide_and_clear();
+
+    switch (action) {
+      case "LeftClick":
+        await invoke("choice", { choice: hint, action: "LeftClick" });
+        break;
+      case "RightClick":
+        await invoke("choice", { choice: hint, action: "RightClick" });
+        break;
+
     }
   }
-  
+
 
   async function input_keydown(e: React.KeyboardEvent<HTMLInputElement>) {
-    //console.log("down:" + e.key);
+    console.log("down:" + e.key);
     if (e.key === " ") {
       e.preventDefault();
       setSpaceDown(true);
@@ -106,14 +110,13 @@ function App() {
         selectedDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     } else if (e.key === "Escape") {
-      await invoke_hide();
-    }else if (e.key === "Enter"&&e.ctrlKey) {
+      await invoke_hide_and_clear();
+    } else if (e.key === "Enter" && e.ctrlKey) {
       invoke_choice("RightClick");
     } else if (e.key === "Enter") {
-      invoke_choice("LeftClick");}
-       else if (e.ctrlKey){
-      invoke_choice("MoveTo");
+      invoke_choice("LeftClick");
     }
+
   }
   async function input_keyup(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === " ") {
@@ -134,6 +137,10 @@ function App() {
       <div className="input-area" ref={inputArea}>
         <input
           autoFocus={true}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
           onChange={(e) => update_input(e.currentTarget.value)}
           value={input}
           placeholder="Search for element names or hint shortcut"
@@ -142,22 +149,24 @@ function App() {
           onBlur={() => inputBox.current?.focus()}
           ref={inputBox}
         />
-        <label className="input-label">Press <a className="highlight">Enter</a> to left click, <a className="highlight">Ctrl+Enter</a> to right click. Hold <a className="highlight">Space+J/K</a> or <a className="highlight">Down/Up</a> to scroll.<span style={{ marginLeft: '10px' }}>{finding?<div className="loader"></div>:"Found " +results.length}</span></label>
+        <label className="input-label">Press <a className="highlight">Enter</a> to left click, <a className="highlight">Ctrl+Enter</a> to right click. Hold <a className="highlight">Space+J/K</a> or <a className="highlight">Down/Up</a> to scroll.<span style={{ marginLeft: '10px' }}>{finding ? <div className="loader"></div> : "Found " + results.length}</span></label>
 
         {results.length > 0 &&
           <div className="holder">
             {results.map((result, i) => {
 
               return (
-                <div className={i === selectedIndex ? "result result-selected" : "result"}><div className="result-left">{result.text} ({result.hint})</div><div className="result-right">{result.parent=="taskbar"?"taskbar | ":""}{result.control}</div></div>
+                <div className={i === selectedIndex ? "result result-selected" : "result"}><div className="result-left">{result.text} ({result.hint})</div><div className="result-right">{result.parent == "taskbar" ? "taskbar | " : ""}{result.control}</div></div>
               );
             })}
           </div>}
       </div>
-      {results.map((result,i) => {
-        const style = { left: result.x + "px", top: result.y + "px" };
+      {results.map((result, i) => {
+        let left=result.x+result.x_offset ;
+        let top=result.y+result.y_offset ;
+        const style = { left: left+ "px", top: top+ "px" };
         return (
-          <div className={i===selectedIndex?"hint hint-selected":"hint"} style={style}>{result.hint}</div>
+          <div className={i === selectedIndex ? "hint hint-selected" : "hint"} style={style}>{result.hint}</div>
         );
       })}
     </div>

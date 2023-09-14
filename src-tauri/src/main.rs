@@ -50,6 +50,9 @@ fn main() {
         .system_tray(tray)
         .on_system_tray_event(handle_system_tray) // <- handling the system tray events
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory); //dont show in dock
+
             let state: State<Mutex<AppState>> = app.state();
             let window = app.get_window("main").unwrap();
             set_size(&window);
@@ -87,9 +90,11 @@ fn handle_system_tray(app: &tauri::AppHandle, event: tauri::SystemTrayEvent) {
 fn toggle_window(app: &tauri::AppHandle) {
     let window = app.get_window("main").unwrap();
     if window.is_visible().unwrap() {
-        window.hide().unwrap();
+        // window.hide().unwrap();
+        app.hide().unwrap();
     } else {
-        window.show().unwrap();
+        app.show().unwrap();
+        //  window.show().unwrap();
         window.unminimize().unwrap();
         window.set_focus().unwrap();
     }
@@ -129,12 +134,14 @@ fn choice(choice: &str, action: &str, state: tauri::State<Mutex<AppState>>, app:
     if let Err(e) = res {
         eprintln!("error sending message: {:?}", e);
     }
-    app.get_window("main").unwrap().hide().unwrap();
+    // app.get_window("main").unwrap().hide().unwrap();
+    app.hide();
 }
 
 #[tauri::command]
 fn hide(app: AppHandle) {
-    app.get_window("main").unwrap().hide().unwrap();
+    // app.get_window("main").unwrap().hide().unwrap();
+    app.hide().unwrap();
 }
 
 #[tauri::command]
@@ -145,7 +152,8 @@ fn show(state: tauri::State<Mutex<AppState>>, app: AppHandle) {
     std::thread::sleep(Duration::from_millis(100)); //wait to get topmost to finish
     let window = app.get_window("main").unwrap();
     set_size(&window);
-    window.show().unwrap();
+    app.show().unwrap();
+    //window.show().unwrap();
 
     window.set_focus().unwrap();
     state.sender.send(Message::RequestHints).unwrap();
@@ -312,6 +320,8 @@ struct Hint {
     hint: String,
     x: i32,
     y: i32,
+    x_offset: i32,
+    y_offset: i32,
     control: String,
     parent: String,
 }
@@ -323,6 +333,8 @@ impl From<&UiElement> for Hint {
             hint: String::new(),
             x: e.x,
             y: e.y,
+            x_offset: e.x_offset,
+            y_offset: e.y_offset,
             control: e.control.clone(),
             parent: e.parent.clone(),
         }

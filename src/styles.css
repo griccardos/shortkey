@@ -96,17 +96,22 @@ display: flex;
 
 .hint{
   position:fixed;
-  background-color: rgba(255, 255, 0,0.9);
+  background-color: rgba(220, 220, 0,0.9);
   color: black;
-  font-weight: bold;
-  padding: 1px;
+  font-weight: normal;
+  font-size: 0.8em;
+  padding: 2px;
   border:1px solid darkslategrey;
   text-align: center;
+  z-index: 1;
+  border-radius: 3px;
+  
 }
 
 .hint-selected{
   background-color: darkgreen;
   color: white;
+  z-index: 2;
 }
 
 .loader {
