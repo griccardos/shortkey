@@ -15,6 +15,8 @@ type Hint = {
   y: number;
   x_offset:number;
   y_offset:number;
+  width:number;
+  height:number;
   hint: string;
   control: string;
   parent: string;
@@ -156,7 +158,7 @@ function App() {
             {results.map((result, i) => {
 
               return (
-                <div className={i === selectedIndex ? "result result-selected" : "result"}><div className="result-left">{result.text} ({result.hint})</div><div className="result-right">{result.parent == "taskbar" ? "taskbar | " : ""}{result.control}</div></div>
+                <div className={i === selectedIndex ? "result result-selected" : "result"}><div className="result-left">{result.text} ({result.hint})</div><div className="result-right">{result.parent == "taskbar" ? "taskbar | " : ""}{result.control}{result.width},{result.height}</div></div>
               );
             })}
           </div>}
@@ -164,9 +166,17 @@ function App() {
       {results.map((result, i) => {
         let left=result.x+result.x_offset ;
         let top=result.y+result.y_offset ;
-        const style = { left: left+ "px", top: top+ "px" };
+        let wid = result.width;
+        let hei = result.height;
+        const style = { left: left+ "px", 
+        top: top+ "px",
+        width:wid==0?'auto':wid+'px', 
+        height:hei==0?'auto':hei+'px'
+      };
         return (
-          <div className={i === selectedIndex ? "hint hint-selected" : "hint"} style={style}>{result.hint}</div>
+          <div className={i==selectedIndex?"hint-holder hint-holder-selected":"hint-holder"} style={style}>
+          <div className={i === selectedIndex ? "hint hint-selected" : "hint"}>{result.hint}</div>
+          </div>
         );
       })}
     </div>

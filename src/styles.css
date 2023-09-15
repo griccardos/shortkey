@@ -94,6 +94,17 @@ display: flex;
   overflow-y: auto;
 }
 
+.hint-holder{
+position:fixed;
+background-color: transparent;
+z-index: 1;
+}
+.hint-holder-selected{
+background-color: rgba(50,255,50,0.5);
+z-index: 2;
+border-radius: 3px;
+  
+}
 .hint{
   position:fixed;
   background-color: rgba(220, 220, 0,0.9);
@@ -103,7 +114,6 @@ display: flex;
   padding: 2px;
   border:1px solid darkslategrey;
   text-align: center;
-  z-index: 1;
   border-radius: 3px;
   
 }
@@ -111,7 +121,6 @@ display: flex;
 .hint-selected{
   background-color: darkgreen;
   color: white;
-  z-index: 2;
 }
 
 .loader {
