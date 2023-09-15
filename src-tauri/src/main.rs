@@ -329,6 +329,8 @@ struct Hint {
     y: i32,
     x_offset: i32,
     y_offset: i32,
+    width: i32,
+    height: i32,
     control: String,
     parent: String,
 }
@@ -342,6 +344,8 @@ impl From<&UiElement> for Hint {
             y: e.y,
             x_offset: e.x_offset,
             y_offset: e.y_offset,
+            width: e.width,
+            height: e.height,
             control: e.control.clone(),
             parent: e.parent.clone(),
         }

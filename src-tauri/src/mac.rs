@@ -1,16 +1,13 @@
-use std::{cell::Cell, fmt::Display};
+use std::{cell::Cell, fmt::Display, sync::atomic::AtomicBool};
 
 use accessibility::{
-    AXAttribute, AXUIElement, AXUIElementAttributes, ElementFinder, TreeVisitor, TreeWalkerFlow,
+    AXAttribute, AXUIElement, AXUIElementAttributes, TreeVisitor, TreeWalkerFlow,
 };
 use active_win_pos_rs::get_active_window;
 use core_foundation::{
-    array::CFArray,
-    base::{CFType, TCFType},
-    number::CFNumber,
+    base::CFType,
     string::CFString,
 };
-use easier::prelude::ToCollectionIteratorExtension;
 use sysinfo::{PidExt, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
 
 use crate::traits::{AccessibilityCalls, Action, UiElement};
@@ -45,8 +42,7 @@ impl AccessibilityCalls for Osx {
             elements.extend(dockvisitor.elements.take());
             //SHIFT TO RIGHT OF DOCK
             elements.iter_mut().for_each(|e: &mut UiElement| {
-                e.x_offset = 40;
-                println!("dock: {e:?}");
+                e.x_offset = 50;
             });
         }
 
@@ -54,19 +50,17 @@ impl AccessibilityCalls for Osx {
             return elements;
         }
 
-        /*
         let visitor = MyVisitor::new();
         //let root = accessibility::ui_element::AXUIElement::system_wide();
         let mut pids = vec![self.topmost_pid.unwrap_or_default()];
         pids.extend(self.child_pids.to_vec());
         for pid in pids {
-            println!("checking pid {pid}");
             let els = accessibility::ui_element::AXUIElement::application(pid);
             let walker = accessibility::TreeWalker::new();
 
             walker.walk(&els, &visitor);
         }
-        elements.extend(visitor.elements.take());*/
+        elements.extend(visitor.elements.take());
 
         elements
     }
@@ -87,7 +81,6 @@ impl AccessibilityCalls for Osx {
         )
         .find(&els)
         {
-            println!("found");
             let _ = match action {
                 Action::LeftClick => ele.perform_action(&CFString::new("AXPress")),
                 Action::RightClick => ele.perform_action(&CFString::new("AXShowMenu")),
@@ -109,7 +102,6 @@ impl AccessibilityCalls for Osx {
         )
         .find(&els)
         {
-            println!("found");
             let _ = match action {
                 Action::LeftClick => ele.perform_action(&CFString::new("AXPress")),
                 Action::RightClick => ele.perform_action(&CFString::new("AXShowMenu")),
@@ -132,23 +124,9 @@ impl AccessibilityCalls for Osx {
         if let Ok(win) = win {
             self.topmost_pid = Some(win.process_id as i32);
 
-            /*   procs
-                .into_iter()
-                .filter(|a| {
-                    // println!("proc {} {} par:{:?}", a.1.name(), a.0, a.1.parent());
-
-                    if let Some(par) = a.1.parent() {
-                        par.as_u32() == win.process_id as u32
-                    } else {
-                        false
-                    }
-                })
-                .to_vec();
-            self.child_pids = children.into_iter().map(|a| a.0.as_u32() as i32).to_vec();
-            println!("child procs:{:?}", self.child_pids);*/
+            
         }
 
-        println!("active pid: {:?}", self.topmost_pid);
     }
 
     fn has_permissions(&self) -> bool {
@@ -159,6 +137,7 @@ impl AccessibilityCalls for Osx {
 struct MyVisitor {
     level: Cell<usize>,
     elements: Cell<Vec<UiElement>>,
+    found_window: AtomicBool, //we only want the first window (topmost)
 }
 
 impl MyVisitor {
@@ -166,6 +145,7 @@ impl MyVisitor {
         Self {
             level: Cell::new(0),
             elements: Cell::new(vec![]),
+            found_window: AtomicBool::new(false),
         }
     }
 }
@@ -174,45 +154,48 @@ impl TreeVisitor for MyVisitor {
     fn enter_element(&self, element: &AXUIElement) -> TreeWalkerFlow {
         self.level.replace(self.level.get() + 1);
 
+       /* let role = get_control(element);
+        let title = get_name(element);
+        let indent = " ".repeat(self.level.get());
+        let pos = get_pos(element);
+        if title.contains("main.rs")
+            || AXUIElementDisplay(element.clone())
+                .to_string()
+                .contains("main.rs")
+        {
+            println!["{indent} {:?}- {:?} {pos:?} ", title, role];
+        }*/
         if must_include(element) {
-            let mut uie: UiElement = element.into();
-            //println!("{uie:?}");
+            let uie: UiElement = element.into();
             let mut old = self.elements.take();
             old.push(uie);
             self.elements.set(old);
-
-            let role = get_control(element);
-            let title = get_name(element);
-            let pos = get_pos(element);
-            let vis = if let Ok(vis) = element.visible_children() {
-                vis.len()
-            } else {
-                0
-            };
-            //println!["__{:?}- {:?} visi{vis} {pos:?} ", title, role];
-
-            if let Ok(names) = element.attribute_names() {
-                for name in names.into_iter() {
-                    /*if &*name == self.children.as_CFString() {
-                        continue;
-                    }*/
-
-                    /*if let Ok(value) = element.attribute(&AXAttribute::new(&*name)) {
-                        println!["<<<<<{}|.  {:?}", *name, value];
-                    }*/
-                }
-            }
+            
             if !must_descend(element) {
                 return TreeWalkerFlow::SkipSubtree;
             } else {
-                println!(
-                    "Not descending into {}",
-                    AXUIElementDisplay(element.clone())
-                );
+                // let displ = AXUIElementDisplay(element.clone()).to_string();
+                // if displ.contains("main.rs") {
+                //     println!("Not descending into {displ}",);
+                // }
             }
         } else {
-            println!("not including {}", AXUIElementDisplay(element.clone()));
+            // let displ = AXUIElementDisplay(element.clone()).to_string();
+            // if displ.contains("main.rs") {
+            //     println!("not including {displ}",);
+            // }
         }
+
+        if get_control(element) == "AXWindow" {
+            let found = self.found_window.load(std::sync::atomic::Ordering::Relaxed);
+            if found {
+                return TreeWalkerFlow::SkipSubtree;
+            } else {
+                self.found_window
+                    .swap(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+
         TreeWalkerFlow::Continue
     }
 
@@ -223,14 +206,11 @@ impl TreeVisitor for MyVisitor {
 
 impl From<&AXUIElement> for UiElement {
     fn from(element: &AXUIElement) -> Self {
-        let pos = format!(
-            "{:?}",
-            element.attribute(&AXAttribute::new(&CFString::new("AXPosition")))
-        );
 
         let name = get_name(element);
         let control = get_control(element);
         let pos = get_pos(element);
+        let size = get_size(element);
 
         UiElement {
             id: "".to_string(),
@@ -239,8 +219,8 @@ impl From<&AXUIElement> for UiElement {
             y: pos.1,
             x_offset: 0,
             y_offset: 0,
-            width: 0,
-            height: 0,
+            width: size.0,
+            height: size.1,
             control,
             item: "".to_string(), //value                .label_value()                .unwrap_or(CFString::from(""))                .to_string(),
             class: "".to_string(),
@@ -260,6 +240,7 @@ fn get_control(element: &AXUIElement) -> String {
 fn must_include(element: &AXUIElement) -> bool {
     //return true;
     let mut incl = true;
+    //only if we can left or right click
     if let Ok(acts) = element.action_names() {
         incl &= acts
             .iter()
@@ -268,6 +249,8 @@ fn must_include(element: &AXUIElement) -> bool {
             .count()
             > 0;
     }
+    //return incl;
+
     incl &= get_name(element).len() > 0; //only include if has text
 
     //return incl;
@@ -278,10 +261,12 @@ fn must_include(element: &AXUIElement) -> bool {
         .to_string()
         .as_str()
     {
-        "AXRow" | "AXStaticText" | "AXMenu" | "AXToolbar" | "AXApplication" | "AXWebArea"
+         "AXStaticText" | "AXMenu" | "AXToolbar" | "AXApplication" | "AXWebArea"
         | "AXTabGroup" | "AXOutline" | "AXHeading" => false,
 
-        "AXGroup" | "AXButton" | "AXCheckBox" | "AXMenuItem" | "AXRadioButton"
+        "AXRow" | "AXGroup" //vscode uses these two for filelist
+        
+        | "AXButton" | "AXCheckBox" | "AXMenuItem" | "AXRadioButton"
         | "AXPopUpButton" => true,
         _ => true,
     };
@@ -313,15 +298,17 @@ fn get_name(element: &AXUIElement) -> String {
 fn get_pos(element: &AXUIElement) -> (i32, i32) {
     let mut pos = (0, 0);
     if let Ok(pos2) = element.attribute(&AXAttribute::new(&CFString::new("AXPosition"))) {
-        //println!("{} POS: {pos2:?}", get_name(element));
         pos = to_pos(pos2);
-        if let Ok(size) = element.attribute(&AXAttribute::new(&CFString::new("AXSize"))) {
-            let size = to_size(size);
-            //pos.0 += size.0;
-        }
-        //println!("POS@:{a:?}");
     }
     pos
+}
+
+fn get_size(element: &AXUIElement)->(i32,i32){
+    let mut size = (0, 0);
+    if let Ok(size2) = element.attribute(&AXAttribute::new(&CFString::new("AXSize"))) {
+        size = to_size(size2);
+    }
+    size
 }
 
 ///HACK. TODO: find out how to convert CFType to pos
@@ -373,7 +360,7 @@ impl Display for AXUIElementDisplay {
             get_name(&self.0),
             chil,
             get_control(&self.0)
-        );
+        )?;
         if let Ok(names) = self.0.attribute_names() {
             for name in names.into_iter() {
                 /*if &*name == self.0.children.as_CFString() {
@@ -381,7 +368,7 @@ impl Display for AXUIElementDisplay {
                 }*/
 
                 if let Ok(value) = self.0.attribute(&AXAttribute::new(&*name)) {
-                    writeln!(f, "  |. {}: {:?}", *name, value);
+                    writeln!(f, "  |. {}: {:?}", *name, value)?;
                 }
             }
         }
@@ -403,7 +390,7 @@ impl DockVisitor {
 
 impl TreeVisitor for DockVisitor {
     fn enter_element(&self, element: &AXUIElement) -> TreeWalkerFlow {
-        let mut uie: UiElement = element.into();
+        let uie: UiElement = element.into();
         //println!("{uie:?}");
         let mut old = self.elements.take();
         old.push(uie);
