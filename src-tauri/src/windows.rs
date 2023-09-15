@@ -214,6 +214,10 @@ impl AccessibilityCalls for Windows {
         }
         println!("active pid: {:?}", self.topmost_pid);
     }
+
+    fn has_permissions(&self) -> bool {
+        true
+    }
 }
 
 fn getid(ele: &UIElement) -> String {
@@ -251,6 +255,8 @@ impl From<&UIElement> for UiElement {
             class,
             parent,
             pid,
+            x_offset: 0,
+            y_offset: 0,
         }
     }
 }

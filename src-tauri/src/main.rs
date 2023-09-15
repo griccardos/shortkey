@@ -90,11 +90,9 @@ fn handle_system_tray(app: &tauri::AppHandle, event: tauri::SystemTrayEvent) {
 fn toggle_window(app: &tauri::AppHandle) {
     let window = app.get_window("main").unwrap();
     if window.is_visible().unwrap() {
-        // window.hide().unwrap();
-        app.hide().unwrap();
+        hide_window(app.clone());
     } else {
-        app.show().unwrap();
-        //  window.show().unwrap();
+        show_window(app.clone());
         window.unminimize().unwrap();
         window.set_focus().unwrap();
     }
@@ -134,14 +132,12 @@ fn choice(choice: &str, action: &str, state: tauri::State<Mutex<AppState>>, app:
     if let Err(e) = res {
         eprintln!("error sending message: {:?}", e);
     }
-    // app.get_window("main").unwrap().hide().unwrap();
-    app.hide();
+    hide_window(app);
 }
 
 #[tauri::command]
 fn hide(app: AppHandle) {
-    // app.get_window("main").unwrap().hide().unwrap();
-    app.hide().unwrap();
+    hide_window(app);
 }
 
 #[tauri::command]
@@ -152,8 +148,7 @@ fn show(state: tauri::State<Mutex<AppState>>, app: AppHandle) {
     std::thread::sleep(Duration::from_millis(100)); //wait to get topmost to finish
     let window = app.get_window("main").unwrap();
     set_size(&window);
-    app.show().unwrap();
-    //window.show().unwrap();
+    show_window(app.clone());
 
     window.set_focus().unwrap();
     state.sender.send(Message::RequestHints).unwrap();
@@ -314,6 +309,18 @@ fn do_matching(hints: &Vec<Hint>, inp: String) -> Vec<&Hint> {
     exact.into_iter().chain(sorted).collect()
 }
 
+fn show_window(app: AppHandle) {
+    #[cfg(target_os = "macos")]
+    app.show().unwrap();
+    #[cfg(not(target_os = "macos"))]
+    app.get_window("main").unwrap().show().unwrap();
+}
+fn hide_window(app: AppHandle) {
+    #[cfg(target_os = "macos")]
+    app.hide().unwrap();
+    #[cfg(not(target_os = "macos"))]
+    app.get_window("main").unwrap().hide().unwrap();
+}
 #[derive(Debug, Serialize, Deserialize)]
 struct Hint {
     text: String,
