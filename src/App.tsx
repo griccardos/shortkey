@@ -158,7 +158,7 @@ function App() {
             {results.map((result, i) => {
 
               return (
-                <div className={i === selectedIndex ? "result result-selected" : "result"}><div className="result-left">{result.text} ({result.hint})</div><div className="result-right">{result.parent == "taskbar" ? "taskbar | " : ""}{result.control}{result.width},{result.height}</div></div>
+                <div className={i === selectedIndex ? "result result-selected" : "result"}><div className="result-left">{result.text} ({result.hint})</div><div className="result-right">{result.parent == "taskbar" ? "taskbar | " : ""}{result.control}{result.x},{result.y}</div></div>
               );
             })}
           </div>}

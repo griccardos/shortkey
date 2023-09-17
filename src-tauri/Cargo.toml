@@ -19,15 +19,16 @@ serde_json = "1.0"
 fuzzy-matcher ="0"#to match 
 easier="0"#for to_vec
 active-win-pos-rs = "0.8" #for active window
+sysinfo="0.29"#to get child ids of process
 
 [target.'cfg(target_os= "windows")'.dependencies]
-uiautomation = "0" #windows 
+uiautomation = "0.6.2" #windows 
+
 
 [target.'cfg(target_os = "macos")'.dependencies] # Only for Mac
 accessibility="0" #get elements
 macos-accessibility-client="0" #test if have accessibility
 core-foundation = "0.9" #for cfstring etc.
-sysinfo="0.29"#to get child ids of process
 
 [profile.dev.package."*"]
 opt-level = 3

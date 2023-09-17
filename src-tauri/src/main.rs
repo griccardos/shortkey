@@ -34,10 +34,11 @@ struct AppState {
 
 fn main() {
     let tray = setup_system_tray();
-
+    let debug = false;
+    let show_taskbar = true;
     let (sender, rec) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        worker(rec);
+        worker(rec, debug, show_taskbar);
     });
     let state = AppState {
         input: "".to_string(),
@@ -142,16 +143,20 @@ fn hide(app: AppHandle) {
 
 #[tauri::command]
 fn show(state: tauri::State<Mutex<AppState>>, app: AppHandle) {
-    app.emit_all("show", ()).unwrap();
+    // let a = windows::test();
+    // println!("a: {:?}", a);
+
     let state = state.lock().unwrap();
     state.sender.send(Message::SaveTopmost).unwrap();
+    state.sender.send(Message::RequestHints).unwrap();
+
     std::thread::sleep(Duration::from_millis(100)); //wait to get topmost to finish
+    app.emit_all("show", ()).unwrap();
     let window = app.get_window("main").unwrap();
     set_size(&window);
     show_window(app.clone());
 
     window.set_focus().unwrap();
-    state.sender.send(Message::RequestHints).unwrap();
 }
 
 fn set_size(window: &Window) {
@@ -179,7 +184,7 @@ fn create_hints(elements: &[UiElement]) -> Vec<Hint> {
     let mut index = HashSet::new();
     let hints: Vec<Hint> = elements
         .iter()
-        .take(600) //hard limit (which is less than 26*26 or 2 chars)
+        //.take(600) //hard limit (which is less than 26*26 or 2 chars)
         .map(|e| e.into())
         .map(|e: Hint| {
             let mut e = e;
@@ -217,15 +222,29 @@ fn create_hints(elements: &[UiElement]) -> Vec<Hint> {
                     }
                 }
             }
+            //go through every combination of 3 letters
+            for c1 in 'A'..'Z' {
+                for c2 in 'A'..'Z' {
+                    for c3 in 'A'..'Z' {
+                        let s = format!("{}{}{}", c1, c2, c3);
+                        if !index.contains(&s) {
+                            e.hint = s.clone();
+                            index.insert(s);
+                            return e;
+                        }
+                    }
+                }
+            }
+
             //should not arrive here
             unreachable!("should be less than 26*26 elements");
         })
         .collect();
     hints
 }
-fn worker(rec: Receiver<Message>) {
+fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
     let mut app = None;
-    let mut auto = get_accessibility();
+    let mut auto = get_accessibility(debug, show_taskbar);
     auto.has_permissions();
     let mut hints: Vec<Hint> = vec![];
     let mut elements: Vec<UiElement> = vec![];
@@ -265,11 +284,11 @@ fn worker(rec: Receiver<Message>) {
     }
 }
 
-fn get_accessibility() -> impl AccessibilityCalls {
+fn get_accessibility(debug: bool, show_taskbar: bool) -> impl AccessibilityCalls {
     #[cfg(target_os = "macos")]
     return mac::Osx::new();
     #[cfg(target_os = "windows")]
-    return windows::Windows::new();
+    return windows::Windows::new(debug, show_taskbar);
 }
 
 ///exact hints first, then fuzzy

@@ -1,20 +1,79 @@
-use std::sync::{atomic::AtomicU32, Arc, Mutex};
+use std::{
+    fmt::Display,
+    sync::{atomic::AtomicU32, Arc, Mutex},
+};
 
 use crate::traits::{AccessibilityCalls, Action, UiElement};
 use active_win_pos_rs::get_active_window;
+use easier::prelude::ToCollectionIteratorExtension;
+use sysinfo::{ProcessExt, SystemExt};
 use uiautomation::{controls::ControlType, Error, UIAutomation, UIElement, UITreeWalker};
 
 pub struct Windows {
     auto: UIAutomation,
     topmost_pid: Option<i32>,
+    topmost_children: Vec<i32>,
+    debug: bool,
+    show_taskbar: bool,
 }
 
 impl Windows {
-    pub fn new() -> Self {
+    pub fn new(debug: bool, show_taskbar: bool) -> Self {
+        //test();
         Windows {
             auto: uiautomation::UIAutomation::new().unwrap(),
             topmost_pid: None,
+            debug,
+            show_taskbar,
+            topmost_children: Vec::new(),
         }
+    }
+}
+pub fn test() -> Vec<UiElement> {
+    use uiautomation::processes::Process;
+
+    //Process::create("notepad.exe").unwrap();
+
+    let automation = UIAutomation::new().unwrap();
+    let root = automation.get_root_element().unwrap();
+
+    let top = automation
+        .create_matcher()
+        .from(root.clone())
+        .timeout(10000)
+        .depth(2)
+        .find_all()
+        .unwrap()
+        .iter()
+        .map(|a| UI2(a.clone()).to_string())
+        .to_vec()
+        .join("\n");
+    println!("all: {}", top);
+
+    let matcher = automation
+        .create_matcher()
+        .from(root)
+        .timeout(10000)
+        .classname("MozillaWindowClass");
+    if let Ok(notepad) = matcher.find_first() {
+        println!(
+            "Found: {} - {}",
+            notepad.get_name().unwrap(),
+            notepad.get_classname().unwrap()
+        );
+
+        return automation
+            .create_matcher()
+            .from(notepad)
+            .find_all()
+            .unwrap()
+            .iter()
+            .map(|a| a.into())
+            .to_vec();
+        //println!("all: {}", m2);
+    } else {
+        println!("Could not find process");
+        return vec![];
     }
 }
 
@@ -25,17 +84,30 @@ impl AccessibilityCalls for Windows {
         let counter = Arc::new(AtomicU32::new(0));
         let vec: Arc<Mutex<Vec<UiElement>>> = Arc::new(Mutex::new(Vec::new()));
         //get from upmost window
-        let walker = self.auto.get_control_view_walker().unwrap();
         let pid = self.topmost_pid;
         let root_window = self
             .auto
+            //.get_focused_element()
             .create_matcher()
-            .depth(2)
+            .depth(5)
             .filter_fn(Box::new(move |e: &UIElement| {
                 Ok(e.get_process_id().unwrap() == pid.unwrap())
             }))
-            .find_first()
-            .unwrap_or(self.auto.get_root_element().unwrap());
+            .find_first();
+        let root_window = if let Ok(win) = root_window {
+            win
+        } else {
+            println!("no root window found");
+            self.auto.get_root_element().unwrap()
+        };
+
+        println!(
+            "root window pid: {:?} {:?} {:?}",
+            root_window.get_process_id().unwrap(),
+            root_window.get_name().unwrap(),
+            root_window.get_classname().unwrap()
+        );
+        let walker = self.auto.get_control_view_walker().unwrap();
 
         walk(
             &walker,
@@ -47,7 +119,7 @@ impl AccessibilityCalls for Windows {
             usize::MAX,
             0,
             |a| must_include(a).unwrap_or_default(),
-            |a| must_descend(a).unwrap_or_default(),
+            self.debug,
         )
         .unwrap();
         /* print(
@@ -60,30 +132,60 @@ impl AccessibilityCalls for Windows {
         )
         .unwrap();*/
 
-        //get from taskbar
-        let taskbar = self
+        // let root_window = self
+        //     .auto
+        //     .create_matcher()
+        //     .from(self.auto.get_root_element().unwrap())
+        //     .timeout(10000)
+        //     .classname("MozillaWindowClass")
+        //     .find_first()
+        //     .unwrap();
+        /* let m2 = self
             .auto
             .create_matcher()
-            .depth(2)
-            .classname("Shell_TrayWnd")
-            .find_first()
+            .timeout(20000)
+            .from(root_window)
+            // .filter_fn(Box::new(|f: &UIElement| {
+            //     let rec = f.get_bounding_rectangle().unwrap();
+            //     if rec.get_left() > 0 && rec.get_top() > 0 {
+            //         return Ok(true);
+            //     } else {
+            //         return Ok(false);
+            //     }
+            // }))
+            .find_all()
+            .unwrap_or(vec![])
+            .iter()
+            .map(|a| UiElement::from(a))
+            .to_vec();
+        vec.lock().unwrap().extend(m2);*/
+
+        //get from taskbar
+        if self.show_taskbar {
+            let taskbar = self
+                .auto
+                .create_matcher()
+                .depth(2)
+                .classname("Shell_TrayWnd")
+                .find_first()
+                .unwrap();
+
+            let walker = self.auto.get_control_view_walker().unwrap();
+
+            walk(
+                &walker,
+                &taskbar,
+                vec.clone(),
+                counter.clone(),
+                "taskbar".into(),
+                None,
+                2,
+                0,
+                |_a| (true, "".into()),
+                self.debug,
+            )
             .unwrap();
-
-        let walker = self.auto.get_control_view_walker().unwrap();
-
-        walk(
-            &walker,
-            &taskbar,
-            vec.clone(),
-            counter.clone(),
-            "taskbar".into(),
-            None,
-            2,
-            0,
-            |_a| true,
-            |a| must_descend(a).unwrap_or_default(),
-        )
-        .unwrap();
+        }
 
         let vec = vec.lock().unwrap();
         let vec: Vec<UiElement> = vec
@@ -194,25 +296,28 @@ impl AccessibilityCalls for Windows {
         println!("invoked in {}ms", start.elapsed().as_millis());
     }
     fn save_topmost(&mut self) {
-        /*
-        self.topmost_pid = None;
-        if let Ok(foc) = self
-            .auto
-            .create_matcher()
-            .filter_fn(Box::new(|a: &UIElement| a.has_keyboard_focus()))
-            .find_first()
-        {
-            if let Ok(_) = foc.get_native_window_handle() {
-                if let Ok(pi) = foc.get_process_id() {
-                    self.topmost_pid = Some(pi)
-                }
-            }
-        }*/
         let win = get_active_window();
         if let Ok(win) = win {
             self.topmost_pid = Some(win.process_id as i32);
         }
         println!("active pid: {:?}", self.topmost_pid);
+
+        let sys = sysinfo::System::new_with_specifics(
+            sysinfo::RefreshKind::new()
+                .with_processes(sysinfo::ProcessRefreshKind::new().with_user()),
+        );
+        if let Some(pid) = self.topmost_pid {
+            self.topmost_children = sys
+                .processes()
+                .iter()
+                .filter(|a| a.1.parent() == Some(sysinfo::Pid::from(pid as usize)))
+                .map(|a| usize::from(a.0.clone()) as i32)
+                .map(|a| {
+                    println!("child pid: {:?}", a);
+                    a
+                })
+                .to_vec();
+        }
     }
 
     fn has_permissions(&self) -> bool {
@@ -230,7 +335,13 @@ fn getid(ele: &UIElement) -> String {
 }
 impl From<&UIElement> for UiElement {
     fn from(element: &UIElement) -> Self {
-        let rect = element.get_bounding_rectangle().unwrap();
+        let rect = element.get_bounding_rectangle();
+        let rect = if let Ok(re) = rect {
+            re
+        } else {
+            println!("ERROR: no rect");
+            uiautomation::types::Rect::default()
+        };
         let x = rect.get_left();
         let y = rect.get_top();
         let width = rect.get_width();
@@ -271,25 +382,48 @@ fn walk(
     pid: Option<i32>,
     max: usize,
     level: usize,
-    include_fn: fn(&UIElement) -> bool,
-    descend_fn: fn(&UIElement) -> bool,
+    include_fn: fn(&UIElement) -> (bool, String),
+    debug: bool,
 ) -> Result<()> {
-    let start = std::time::Instant::now();
     counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if level > max {
         return Ok(());
     }
+    let mut correct_pid = true;
     //dont check wrong pid
-    if pid.is_some() && Some(element.get_process_id()?) != pid {
-        return Ok(());
+    let el_pid = element.get_process_id()?;
+    if pid.is_some() && Some(el_pid) != pid {
+        correct_pid = false;
+        println!("wrong pid {:?} {:?}", el_pid, pid);
+        // return Ok(());
+    } else {
+        // println!("right pid {:?} {:?}", el_pid, pid);
     }
+    // if UiElement::from(element).name.contains("Square root") {
+    //     println!(
+    //         "including {:?} [{}] pid{:?}",
+    //         element,
+    //         UI2(element.clone()),
+    //         element.get_process_id()
+    //     );
+    // }
 
-    if include_fn(element) {
+    let incl = include_fn(element);
+    if incl.0 && correct_pid {
         let mut el: UiElement = element.into();
         el.parent = parent.clone();
         vec.lock().unwrap().push(el);
+    } else {
+        if debug {
+            let mut el: UiElement = element.into();
+            el.name += &format!(" (EXCLUDING {})", incl.1);
+
+            //println!("excluding {:?} [{}]", el, UI2(element.clone()));
+
+            vec.lock().unwrap().push(el);
+        }
     }
-    if !descend_fn(element) {
+    if !must_descend(element)? && !debug {
         return Ok(());
     }
 
@@ -304,7 +438,7 @@ fn walk(
             max,
             level + 1,
             include_fn,
-            descend_fn,
+            debug,
         )?;
 
         let mut next = child;
@@ -319,7 +453,7 @@ fn walk(
                 max,
                 level + 1,
                 include_fn,
-                descend_fn,
+                debug,
             )?;
 
             next = sibling;
@@ -373,38 +507,39 @@ fn print(
     }
     Ok(())
 }
-/*
+
 struct UI2(UIElement);
 impl Display for UI2 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let rect = self.0.get_bounding_rectangle().unwrap();
+
         let x = rect.get_left();
         let y = rect.get_top();
         let width = rect.get_width();
         let height = rect.get_height();
         let typ = format!("{:?}", self.0.get_control_type().unwrap());
-        let classname = self.0.get_classname().unwrap();
-        let it = self.0.get_item_type().unwrap();
+        let classname = self.0.get_classname().unwrap_or_default();
         let name = self.0.get_name().unwrap();
         let pid = self.0.get_process_id().unwrap();
+
         write!(
             f,
-            "UIElement {{  x: {}, y: {}, width: {}, height: {}, typ: {}, classname: {}  {it} {name} {pid}}}",
+            "UIElement {{  x: {}, y: {}, width: {}, height: {}, typ: {}, classname: '{}'   name:'{name}' pid:{pid}}}",
            x, y, width, height, typ, classname
         )
     }
-}*/
+}
 
-fn must_include(element: &UIElement) -> Result<bool> {
+fn must_include(element: &UIElement) -> Result<(bool, String)> {
     // return Ok(true);
     if element.is_offscreen()? {
         //  println!("Excluding offscreen element {:?}", element);
-        return Ok(false);
+        return Ok((false, "Offscreen".into()));
     }
 
     //return Ok(true);
 
-    Ok(match element.get_control_type()? {
+    let ctype = match element.get_control_type()? {
         ControlType::Button
         | ControlType::ListItem
         | ControlType::TreeItem
@@ -447,7 +582,13 @@ fn must_include(element: &UIElement) -> Result<bool> {
         | ControlType::Separator
         | ControlType::SemanticZoom
         | ControlType::AppBar => false,
-    })
+    };
+
+    if ctype {
+        return Ok((true, String::new()));
+    } else {
+        return Ok((false, "unallowed control".to_string()));
+    }
 }
 
 fn must_descend(element: &UIElement) -> Result<bool> {

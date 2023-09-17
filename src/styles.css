@@ -20,6 +20,7 @@ font-family: sans-serif;
   border:1px solid gray;
   overflow: hidden;
   width:900px;
+  z-index: 3;
 }
 
 input {
