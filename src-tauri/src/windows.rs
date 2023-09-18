@@ -1,7 +1,6 @@
 use std::{
     fmt::Display,
     sync::{atomic::AtomicU32, Arc, Mutex},
-    vec,
 };
 
 use crate::traits::{AccessibilityCalls, Action, UiElement};
@@ -15,140 +14,64 @@ pub struct Windows {
     topmost_children: Vec<i32>,
     debug: bool,
     show_taskbar: bool,
+    elements: Vec<UIElement>,
 }
 
 impl Windows {
     pub fn new(debug: bool, show_taskbar: bool) -> Self {
-        //test();
         Windows {
             topmost_pid: None,
             debug,
             show_taskbar,
             topmost_children: Vec::new(),
+            elements: Vec::new(),
         }
     }
 }
 
 impl AccessibilityCalls for Windows {
-    fn get_elements(&self) -> Vec<UiElement> {
+    fn get_elements(&mut self) -> Vec<UiElement> {
         let start = std::time::Instant::now();
         println!("Starting to get elements");
-        let counter = Arc::new(AtomicU32::new(0));
-        let vec: Arc<Mutex<Vec<UiElement>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut vec: Vec<UIElement> = Vec::new();
         //get from upmost window
         let pid = self.topmost_pid;
-        get_elements_pid(vec.clone(), counter.clone(), pid, self.debug);
-        //let els = get_elements_mozilla();
-        //counter.fetch_add(els.len() as u32, std::sync::atomic::Ordering::Relaxed);
-        //vec.lock().unwrap().extend(els);
+        let elements = get_elements_pid(pid, self.debug);
+        vec.extend(elements);
 
         //get from taskbar
         if self.show_taskbar {
-            get_elements_taskbar(vec.clone(), counter.clone());
+            let elements = get_elements_taskbar();
+            vec.extend(elements);
         }
 
-        let vec = vec.lock().unwrap();
-        let vec: Vec<UiElement> = vec
-            .iter()
+        self.elements = vec.clone();
+
+        let uivec = vec
+            .into_iter()
+            .map(|a| UiElement::from(&a))
             .filter(|a| a.name != "") //exclude empty names
-            .map(|a| a.clone())
-            .collect();
-        /*
-                let vec: Vec<UiElement> = self
-                    .auto
-                    .create_matcher()
-                    /* .filter_fn(Box::new(|f: &UIElement| {
-                        let include = f.get_control_type()? == ControlType::TabItem
-                            || f.get_control_type()? == ControlType::Button;
-                        let required = f.is_enabled().unwrap()
-                            && f.is_control_element().unwrap()
-                            && !f.is_offscreen().unwrap();
-                        Ok(include && required)
-                    }))*/
-                    .filter_fn(Box::new({
-                        let pid = self.topmost_pid.clone();
-                        move |a: &UIElement| must_include(a, pid)
-                    }))
-                    .find_all()
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|a| a.into())
-                    .collect();
-        */
+            .to_vec();
+
         println!(
-            "Got {} elements out of {} in {}ms",
-            vec.len(),
-            counter.load(std::sync::atomic::Ordering::Relaxed),
+            "Got {} elements in {}ms",
+            uivec.len(),
             start.elapsed().as_millis()
         );
 
-        vec
+        uivec
     }
 
     fn invoke(&self, element: &UiElement, action: Action) {
         //it will either be in start button or active window
         let start = std::time::Instant::now();
-        let auto = UIAutomation::new().unwrap();
 
-        let ele;
-        //find in taskbar
-        let taskbar = auto
-            .create_matcher()
-            .depth(2)
-            .classname("Shell_TrayWnd")
-            .find_first()
-            .unwrap();
-
-        let cond = auto
-            .create_property_condition(
-                uiautomation::types::UIProperty::ClassName,
-                element.class.clone().into(),
-                None,
-            )
-            .and(auto.create_property_condition(
-                uiautomation::types::UIProperty::Name,
-                element.name.clone().into(),
-                None,
-            ))
-            .unwrap();
-        let taskbar_item = taskbar.find_first(uiautomation::types::TreeScope::Subtree, &cond);
-        //if it is a taskbar item and same pid as taskbar
-        if taskbar_item.is_ok()
-            && taskbar_item.as_ref().unwrap().get_process_id() == taskbar.get_process_id()
-        {
-            ele = taskbar_item
-        } else {
-            let win = auto
-                .create_matcher()
-                .match_name(element.name.clone())
-                .classname(element.class.clone())
-                .filter_fn(Box::new({
-                    let (x, y) = (element.x, element.y);
-                    move |e: &UIElement| {
-                        e.get_bounding_rectangle()
-                            .map(|r| r.get_left() == x && r.get_top() == y)
-                    }
-                }))
-                .find_first();
-            ele = win;
-        }
-        if let Ok(ele) = ele {
-            println!("invoking {:?}", ele.get_name().unwrap());
-            let mouse = uiautomation::inputs::Mouse::new().move_time(1);
-            //let old = uiautomation::inputs::Mouse::get_cursor_pos().unwrap();
-            let rect = ele.get_bounding_rectangle().unwrap();
-            let pos = uiautomation::types::Point::new(
-                rect.get_left() + rect.get_width() / 2,
-                rect.get_top() + rect.get_height() / 2,
-            );
-            mouse.move_to(pos).unwrap();
-            match action {
-                Action::LeftClick => {
-                    ele.click().unwrap();
-                }
-                Action::RightClick => ele.right_click().unwrap(),
-            }
-            // mouse.move_to(old).unwrap();
+        let ele = self
+            .elements
+            .iter()
+            .find(|&a| UiElement::from(a).id == element.id);
+        if let Some(ele) = ele {
+            invoke_element(ele, action);
         } else {
             println!("no element found for {:?}", element);
         }
@@ -183,53 +106,40 @@ impl AccessibilityCalls for Windows {
         true
     }
 }
-pub fn get_elements_mozilla() -> Vec<UiElement> {
-    let auto = UIAutomation::new().unwrap();
 
-    let root_window = auto
-        .create_matcher()
-        .from(auto.get_root_element().unwrap())
-        .timeout(10000)
-        .classname("MozillaWindowClass")
-        .find_first()
-        .unwrap();
-    let m2 = auto
-        .create_matcher()
-        .timeout(10000)
-        .from(root_window)
-        // .filter_fn(Box::new(|f: &UIElement| {
-        //     let rec = f.get_bounding_rectangle().unwrap();
-        //     if rec.get_left() > 0 && rec.get_top() > 0 {
-        //         return Ok(true);
-        //     } else {
-        //         return Ok(false);
-        //     }
-        // }))
-        .find_all()
-        .unwrap_or(vec![])
-        .iter()
-        .map(|a| UiElement::from(a))
-        .to_vec();
-    println!(
-        "olar {:?} ",
-        m2.iter().filter(|a| a.name.contains("olar")).to_vec()
+fn invoke_element(ele: &UIElement, action: Action) {
+    println!("invoking {:?}", ele.get_name().unwrap());
+    let mouse = uiautomation::inputs::Mouse::new().move_time(1);
+    //let old = uiautomation::inputs::Mouse::get_cursor_pos().unwrap();
+    let rect = ele.get_bounding_rectangle().unwrap();
+    let pos = uiautomation::types::Point::new(
+        rect.get_left() + rect.get_width() / 2,
+        rect.get_top() + rect.get_height() / 2,
     );
-    m2
+    mouse.move_to(pos).unwrap();
+    match action {
+        Action::LeftClick => {
+            ele.click().unwrap();
+        }
+        Action::RightClick => ele.right_click().unwrap(),
+    }
+    // mouse.move_to(old).unwrap();
 }
-fn get_elements_pid(
-    vec: Arc<Mutex<Vec<UiElement>>>,
-    counter: Arc<AtomicU32>,
-    pid: Option<i32>,
-    debug: bool,
-) {
+
+fn get_elements_pid(pid: Option<i32>, debug: bool) -> Vec<UIElement> {
+    if pid.is_none() {
+        return Vec::new();
+    }
+    let pid = pid.unwrap();
+    let vec: Arc<Mutex<Vec<UIElement>>> = Arc::new(Mutex::new(Vec::new()));
+    let counter = Arc::new(AtomicU32::new(0));
     let auto = UIAutomation::new().unwrap();
 
     let root_window = auto
-        //.get_focused_element()
         .create_matcher()
         .depth(5)
         .filter_fn(Box::new(move |e: &UIElement| {
-            Ok(e.get_process_id().unwrap() == pid.unwrap())
+            Ok(e.get_process_id().unwrap() == pid)
         }))
         .find_first();
     let root_window = if let Ok(win) = root_window {
@@ -256,12 +166,20 @@ fn get_elements_pid(
         pid,
         usize::MAX,
         0,
-        |a| must_include(a).unwrap_or_default(),
         debug,
     )
     .unwrap();
+    println!(
+        "pid {pid} elements: {} out of {}",
+        vec.lock().unwrap().len(),
+        counter.load(std::sync::atomic::Ordering::Relaxed)
+    );
+    let vec2 = vec.lock().unwrap();
+    vec2.clone()
 }
-fn get_elements_taskbar(vec: Arc<Mutex<Vec<UiElement>>>, counter: Arc<AtomicU32>) {
+fn get_elements_taskbar() -> Vec<UIElement> {
+    let vec: Arc<Mutex<Vec<UIElement>>> = Arc::new(Mutex::new(Vec::new()));
+    let counter = Arc::new(AtomicU32::new(0));
     let auto = UIAutomation::new().unwrap();
 
     let taskbar = auto
@@ -270,6 +188,7 @@ fn get_elements_taskbar(vec: Arc<Mutex<Vec<UiElement>>>, counter: Arc<AtomicU32>
         .classname("Shell_TrayWnd")
         .find_first()
         .unwrap();
+    let pid = taskbar.get_process_id().unwrap_or_default();
 
     let walker = auto.get_control_view_walker().unwrap();
 
@@ -279,13 +198,19 @@ fn get_elements_taskbar(vec: Arc<Mutex<Vec<UiElement>>>, counter: Arc<AtomicU32>
         vec.clone(),
         counter.clone(),
         "taskbar".into(),
-        None,
+        pid,
         2,
         0,
-        |_a| (true, "".into()),
         false,
     )
     .unwrap();
+    println!(
+        "taskbar elements: {} out of {}",
+        vec.lock().unwrap().len(),
+        counter.load(std::sync::atomic::Ordering::Relaxed)
+    );
+    let vec2 = vec.lock().unwrap();
+    vec2.clone()
 }
 
 fn getid(ele: &UIElement) -> String {
@@ -339,13 +264,12 @@ pub type Result<T> = core::result::Result<T, Error>;
 fn walk(
     walker: &UITreeWalker,
     element: &UIElement,
-    vec: Arc<Mutex<Vec<UiElement>>>,
+    vec: Arc<Mutex<Vec<UIElement>>>,
     counter: Arc<AtomicU32>,
     parent: String,
-    pid: Option<i32>,
+    pid: i32,
     max: usize,
     level: usize,
-    include_fn: fn(&UIElement) -> (bool, String),
     debug: bool,
 ) -> Result<()> {
     counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -355,7 +279,7 @@ fn walk(
     let mut correct_pid = true;
     //dont check wrong pid
     let el_pid = element.get_process_id()?;
-    if pid.is_some() && Some(el_pid) != pid {
+    if el_pid != pid {
         correct_pid = false;
         println!("wrong pid {:?} {:?}", el_pid, pid);
         // return Ok(());
@@ -371,19 +295,13 @@ fn walk(
     //     );
     // }
 
-    let incl = include_fn(element);
+    let incl = must_include(element)?;
     if incl.0 && correct_pid {
-        let mut el: UiElement = element.into();
-        el.parent = parent.clone();
-        vec.lock().unwrap().push(el);
+        vec.lock().unwrap().push(element.clone());
     } else {
         if debug {
-            let mut el: UiElement = element.into();
-            el.name += &format!(" (EXCLUDING {})", incl.1);
-
-            //println!("excluding {:?} [{}]", el, UI2(element.clone()));
-
-            vec.lock().unwrap().push(el);
+            println!("excluding {} because {}", UI2(element.clone()), incl.1);
+            vec.lock().unwrap().push(element.clone());
         }
     }
     if !must_descend(element)? && !debug {
@@ -400,7 +318,6 @@ fn walk(
             pid,
             max,
             level + 1,
-            include_fn,
             debug,
         )?;
 
@@ -415,7 +332,6 @@ fn walk(
                 pid,
                 max,
                 level + 1,
-                include_fn,
                 debug,
             )?;
 
@@ -429,45 +345,6 @@ fn walk(
         element.get_control_type().unwrap(),
         element.get_name().unwrap_or_default(),
     );*/
-    Ok(())
-}
-
-fn print(
-    walker: &UITreeWalker,
-    element: &UIElement,
-    max: usize,
-    level: usize,
-    include_fn: fn(&UIElement) -> bool,
-    descend_fn: fn(&UIElement) -> bool,
-) -> Result<()> {
-    let start = std::time::Instant::now();
-    if level > max {
-        return Ok(());
-    }
-
-    if !descend_fn(element) {
-        return Ok(());
-    }
-
-    if let Ok(child) = walker.get_first_child(&element) {
-        print(walker, &child, max, level + 1, include_fn, descend_fn)?;
-
-        let mut next = child;
-        while let Ok(sibling) = walker.get_next_sibling(&next) {
-            print(walker, &sibling, max, level + 1, include_fn, descend_fn)?;
-
-            next = sibling;
-        }
-    }
-    if include_fn(element) {
-        println!(
-            "PRINT:{},{},{:?},\"{}\"",
-            start.elapsed().as_millis(),
-            level,
-            element.get_control_type().unwrap(),
-            element.get_name().unwrap_or_default(),
-        );
-    }
     Ok(())
 }
 

@@ -13,8 +13,23 @@ Useful for people with conditions that prevent full use of the mouse.
 - that one time where you don't want to reach for the mouse and think there must be another way. This. This is that way.
 
 ## Getting Started
-Default shortcut is `alt+enter` to open the application  
+Navigate to the window you want shortcuts on  
+Default shortcut to open the app is `alt+enter`  
 Select elements with `arrow keys` or `space+j/k`  
 Press `enter` to click the selected element  
 Press `ctrl+enter` to right click the selected element  
 
+## Notes
+- Browsers typically have thousands of elements, so they take longer. It is recommended to rather use a similar tool made for them e.g. Vimium
+- Not all elements are made visible.
+
+## Functionality
+- [x] Left and right click
+- [x] Windows
+- [X] Mac
+- [ ] Linux
+- [ ] Add a way to select type of elements you want visible
+- [ ] Make this customizable per application
+- [ ] Make showing taskbar elements optional
+- [ ] Optional colours, font sizes
+- [ ] Multi monitor testing
