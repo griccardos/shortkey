@@ -1,6 +1,7 @@
 use std::{
     fmt::Display,
     sync::{atomic::AtomicU32, Arc, Mutex},
+    vec,
 };
 
 use crate::traits::{AccessibilityCalls, Action, UiElement};
@@ -10,7 +11,6 @@ use sysinfo::{ProcessExt, SystemExt};
 use uiautomation::{controls::ControlType, Error, UIAutomation, UIElement, UITreeWalker};
 
 pub struct Windows {
-    auto: UIAutomation,
     topmost_pid: Option<i32>,
     topmost_children: Vec<i32>,
     debug: bool,
@@ -21,59 +21,11 @@ impl Windows {
     pub fn new(debug: bool, show_taskbar: bool) -> Self {
         //test();
         Windows {
-            auto: uiautomation::UIAutomation::new().unwrap(),
             topmost_pid: None,
             debug,
             show_taskbar,
             topmost_children: Vec::new(),
         }
-    }
-}
-pub fn test() -> Vec<UiElement> {
-    use uiautomation::processes::Process;
-
-    //Process::create("notepad.exe").unwrap();
-
-    let automation = UIAutomation::new().unwrap();
-    let root = automation.get_root_element().unwrap();
-
-    let top = automation
-        .create_matcher()
-        .from(root.clone())
-        .timeout(10000)
-        .depth(2)
-        .find_all()
-        .unwrap()
-        .iter()
-        .map(|a| UI2(a.clone()).to_string())
-        .to_vec()
-        .join("\n");
-    println!("all: {}", top);
-
-    let matcher = automation
-        .create_matcher()
-        .from(root)
-        .timeout(10000)
-        .classname("MozillaWindowClass");
-    if let Ok(notepad) = matcher.find_first() {
-        println!(
-            "Found: {} - {}",
-            notepad.get_name().unwrap(),
-            notepad.get_classname().unwrap()
-        );
-
-        return automation
-            .create_matcher()
-            .from(notepad)
-            .find_all()
-            .unwrap()
-            .iter()
-            .map(|a| a.into())
-            .to_vec();
-        //println!("all: {}", m2);
-    } else {
-        println!("Could not find process");
-        return vec![];
     }
 }
 
@@ -85,106 +37,14 @@ impl AccessibilityCalls for Windows {
         let vec: Arc<Mutex<Vec<UiElement>>> = Arc::new(Mutex::new(Vec::new()));
         //get from upmost window
         let pid = self.topmost_pid;
-        let root_window = self
-            .auto
-            //.get_focused_element()
-            .create_matcher()
-            .depth(5)
-            .filter_fn(Box::new(move |e: &UIElement| {
-                Ok(e.get_process_id().unwrap() == pid.unwrap())
-            }))
-            .find_first();
-        let root_window = if let Ok(win) = root_window {
-            win
-        } else {
-            println!("no root window found");
-            self.auto.get_root_element().unwrap()
-        };
-
-        println!(
-            "root window pid: {:?} {:?} {:?}",
-            root_window.get_process_id().unwrap(),
-            root_window.get_name().unwrap(),
-            root_window.get_classname().unwrap()
-        );
-        let walker = self.auto.get_control_view_walker().unwrap();
-
-        walk(
-            &walker,
-            &root_window,
-            vec.clone(),
-            counter.clone(),
-            root_window.get_name().unwrap_or_default(),
-            self.topmost_pid,
-            usize::MAX,
-            0,
-            |a| must_include(a).unwrap_or_default(),
-            self.debug,
-        )
-        .unwrap();
-        /* print(
-            &walker,
-            &root_window,
-            usize::MAX,
-            0,
-            |a| must_include(a).unwrap_or_default(),
-            |a| must_descend(a).unwrap_or_default(),
-        )
-        .unwrap();*/
-
-        // let root_window = self
-        //     .auto
-        //     .create_matcher()
-        //     .from(self.auto.get_root_element().unwrap())
-        //     .timeout(10000)
-        //     .classname("MozillaWindowClass")
-        //     .find_first()
-        //     .unwrap();
-        /* let m2 = self
-            .auto
-            .create_matcher()
-            .timeout(20000)
-            .from(root_window)
-            // .filter_fn(Box::new(|f: &UIElement| {
-            //     let rec = f.get_bounding_rectangle().unwrap();
-            //     if rec.get_left() > 0 && rec.get_top() > 0 {
-            //         return Ok(true);
-            //     } else {
-            //         return Ok(false);
-            //     }
-            // }))
-            .find_all()
-            .unwrap_or(vec![])
-            .iter()
-            .map(|a| UiElement::from(a))
-            .to_vec();
-        vec.lock().unwrap().extend(m2);*/
+        get_elements_pid(vec.clone(), counter.clone(), pid, self.debug);
+        //let els = get_elements_mozilla();
+        //counter.fetch_add(els.len() as u32, std::sync::atomic::Ordering::Relaxed);
+        //vec.lock().unwrap().extend(els);
 
         //get from taskbar
         if self.show_taskbar {
-            let taskbar = self
-                .auto
-                .create_matcher()
-                .depth(2)
-                .classname("Shell_TrayWnd")
-                .find_first()
-                .unwrap();
-
-            let walker = self.auto.get_control_view_walker().unwrap();
-
-            walk(
-                &walker,
-                &taskbar,
-                vec.clone(),
-                counter.clone(),
-                "taskbar".into(),
-                None,
-                2,
-                0,
-                |_a| (true, "".into()),
-                self.debug,
-            )
-            .unwrap();
+            get_elements_taskbar(vec.clone(), counter.clone());
         }
 
         let vec = vec.lock().unwrap();
@@ -228,24 +88,24 @@ impl AccessibilityCalls for Windows {
     fn invoke(&self, element: &UiElement, action: Action) {
         //it will either be in start button or active window
         let start = std::time::Instant::now();
+        let auto = UIAutomation::new().unwrap();
+
         let ele;
         //find in taskbar
-        let taskbar = self
-            .auto
+        let taskbar = auto
             .create_matcher()
             .depth(2)
             .classname("Shell_TrayWnd")
             .find_first()
             .unwrap();
 
-        let cond = self
-            .auto
+        let cond = auto
             .create_property_condition(
                 uiautomation::types::UIProperty::ClassName,
                 element.class.clone().into(),
                 None,
             )
-            .and(self.auto.create_property_condition(
+            .and(auto.create_property_condition(
                 uiautomation::types::UIProperty::Name,
                 element.name.clone().into(),
                 None,
@@ -258,8 +118,7 @@ impl AccessibilityCalls for Windows {
         {
             ele = taskbar_item
         } else {
-            let win = self
-                .auto
+            let win = auto
                 .create_matcher()
                 .match_name(element.name.clone())
                 .classname(element.class.clone())
@@ -323,6 +182,110 @@ impl AccessibilityCalls for Windows {
     fn has_permissions(&self) -> bool {
         true
     }
+}
+pub fn get_elements_mozilla() -> Vec<UiElement> {
+    let auto = UIAutomation::new().unwrap();
+
+    let root_window = auto
+        .create_matcher()
+        .from(auto.get_root_element().unwrap())
+        .timeout(10000)
+        .classname("MozillaWindowClass")
+        .find_first()
+        .unwrap();
+    let m2 = auto
+        .create_matcher()
+        .timeout(10000)
+        .from(root_window)
+        // .filter_fn(Box::new(|f: &UIElement| {
+        //     let rec = f.get_bounding_rectangle().unwrap();
+        //     if rec.get_left() > 0 && rec.get_top() > 0 {
+        //         return Ok(true);
+        //     } else {
+        //         return Ok(false);
+        //     }
+        // }))
+        .find_all()
+        .unwrap_or(vec![])
+        .iter()
+        .map(|a| UiElement::from(a))
+        .to_vec();
+    println!(
+        "olar {:?} ",
+        m2.iter().filter(|a| a.name.contains("olar")).to_vec()
+    );
+    m2
+}
+fn get_elements_pid(
+    vec: Arc<Mutex<Vec<UiElement>>>,
+    counter: Arc<AtomicU32>,
+    pid: Option<i32>,
+    debug: bool,
+) {
+    let auto = UIAutomation::new().unwrap();
+
+    let root_window = auto
+        //.get_focused_element()
+        .create_matcher()
+        .depth(5)
+        .filter_fn(Box::new(move |e: &UIElement| {
+            Ok(e.get_process_id().unwrap() == pid.unwrap())
+        }))
+        .find_first();
+    let root_window = if let Ok(win) = root_window {
+        win
+    } else {
+        println!("no root window found");
+        auto.get_root_element().unwrap()
+    };
+
+    println!(
+        "root window pid: {:?} {:?} {:?}",
+        root_window.get_process_id().unwrap(),
+        root_window.get_name().unwrap(),
+        root_window.get_classname().unwrap()
+    );
+    let walker = auto.get_control_view_walker().unwrap();
+
+    walk(
+        &walker,
+        &root_window,
+        vec.clone(),
+        counter.clone(),
+        root_window.get_name().unwrap_or_default(),
+        pid,
+        usize::MAX,
+        0,
+        |a| must_include(a).unwrap_or_default(),
+        debug,
+    )
+    .unwrap();
+}
+fn get_elements_taskbar(vec: Arc<Mutex<Vec<UiElement>>>, counter: Arc<AtomicU32>) {
+    let auto = UIAutomation::new().unwrap();
+
+    let taskbar = auto
+        .create_matcher()
+        .depth(2)
+        .classname("Shell_TrayWnd")
+        .find_first()
+        .unwrap();
+
+    let walker = auto.get_control_view_walker().unwrap();
+
+    walk(
+        &walker,
+        &taskbar,
+        vec.clone(),
+        counter.clone(),
+        "taskbar".into(),
+        None,
+        2,
+        0,
+        |_a| (true, "".into()),
+        false,
+    )
+    .unwrap();
 }
 
 fn getid(ele: &UIElement) -> String {

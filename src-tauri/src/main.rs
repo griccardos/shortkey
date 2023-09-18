@@ -33,6 +33,8 @@ struct AppState {
 }
 
 fn main() {
+    println!("starting");
+
     let tray = setup_system_tray();
     let debug = false;
     let show_taskbar = true;
@@ -53,10 +55,16 @@ fn main() {
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory); //dont show in dock
+                                                                           //listen to get fullscreen
+            let ah = app.app_handle();
+            app.listen_global("go_full", move |_event| {
+                let window = ah.get_focused_window().unwrap();
+                set_full_size(&window);
+            });
 
             let state: State<Mutex<AppState>> = app.state();
             let window = app.get_window("main").unwrap();
-            set_size(&window);
+            set_output_size(&window);
 
             let state = state.lock().unwrap();
             state
@@ -124,6 +132,8 @@ impl From<&str> for Action {
 
 #[tauri::command]
 fn choice(choice: &str, action: &str, state: tauri::State<Mutex<AppState>>, app: AppHandle) {
+    hide_window(app);
+    std::thread::sleep(Duration::from_millis(100)); //wait to hide window
     let state = state.lock().unwrap();
 
     println!("choice:{choice}");
@@ -133,7 +143,6 @@ fn choice(choice: &str, action: &str, state: tauri::State<Mutex<AppState>>, app:
     if let Err(e) = res {
         eprintln!("error sending message: {:?}", e);
     }
-    hide_window(app);
 }
 
 #[tauri::command]
@@ -148,18 +157,20 @@ fn show(state: tauri::State<Mutex<AppState>>, app: AppHandle) {
 
     let state = state.lock().unwrap();
     state.sender.send(Message::SaveTopmost).unwrap();
-    state.sender.send(Message::RequestHints).unwrap();
 
     std::thread::sleep(Duration::from_millis(100)); //wait to get topmost to finish
+    state.sender.send(Message::RequestHints).unwrap();
+
     app.emit_all("show", ()).unwrap();
     let window = app.get_window("main").unwrap();
-    set_size(&window);
+    set_output_size(&window);
     show_window(app.clone());
 
     window.set_focus().unwrap();
 }
 
-fn set_size(window: &Window) {
+///full screen for hints
+fn set_full_size(window: &Window) {
     let monitor = window.current_monitor().unwrap().unwrap();
     let size = monitor.size();
     window
@@ -170,6 +181,27 @@ fn set_size(window: &Window) {
         .unwrap();
     window
         .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
+        .unwrap();
+}
+
+///size for only output
+fn set_output_size(window: &Window) {
+    let monitor = window.current_monitor().unwrap().unwrap();
+    let size = monitor.size();
+    let wid = 900;
+    let hei = 300;
+
+    window
+        .set_size(Size::Physical(PhysicalSize {
+            width: wid,
+            height: hei,
+        }))
+        .unwrap();
+    window
+        .set_position(Position::Physical(PhysicalPosition {
+            x: (size.width - wid) as i32 / 2,
+            y: (size.height - hei) as i32 / 2,
+        }))
         .unwrap();
 }
 
@@ -243,6 +275,8 @@ fn create_hints(elements: &[UiElement]) -> Vec<Hint> {
     hints
 }
 fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
+    //windows::get_elements_mozilla();
+
     let mut app = None;
     let mut auto = get_accessibility(debug, show_taskbar);
     auto.has_permissions();
@@ -250,6 +284,8 @@ fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
     let mut elements: Vec<UiElement> = vec![];
     loop {
         if let Ok(msg) = rec.recv() {
+            // windows::get_elements_mozilla();
+
             match msg {
                 Message::AppHandle(ah) => app = Some(ah),
                 Message::UpdateInput(inp) => {
@@ -262,6 +298,7 @@ fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
                     elements = auto.get_elements();
                     hints = create_hints(&elements);
                     let app = app.as_ref().unwrap();
+                    app.trigger_global("go_full", None);
                     app.emit_all("update_results", hints.iter().collect::<Vec<&Hint>>())
                         .unwrap();
                 }
@@ -278,7 +315,9 @@ fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
                         );
                     }
                 }
-                Message::SaveTopmost => auto.save_topmost(),
+                Message::SaveTopmost => {
+                    auto.save_topmost();
+                }
             }
         }
     }
