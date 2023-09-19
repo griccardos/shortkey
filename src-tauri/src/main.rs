@@ -224,13 +224,13 @@ fn create_hints(elements: &[UiElement]) -> Vec<Hint> {
             let one = chars.iter().take(1).collect::<String>().to_uppercase();
             let two = chars.iter().take(2).collect::<String>().to_uppercase();
 
-            if one.len() > 0 && !index.contains(&one) {
+            if !one.is_empty() && !index.contains(&one) {
                 e.hint = one.clone();
                 index.insert(one);
                 return e;
             }
             //go through each of the letters, and return the first one that isn't in the index
-            for c in 'A'..'Z' {
+            for c in 'A'..='Z' {
                 if !index.contains(&c.to_string()) {
                     e.hint = c.to_string();
                     index.insert(c.to_string());
@@ -238,14 +238,14 @@ fn create_hints(elements: &[UiElement]) -> Vec<Hint> {
                 }
             }
             //else try 2
-            if two.len() > 0 && !index.contains(&two) {
+            if !two.is_empty() && !index.contains(&two) {
                 e.hint = two.clone();
                 index.insert(two);
                 return e;
             }
             //go through every combination of 2 letters
-            for c1 in 'A'..'Z' {
-                for c2 in 'A'..'Z' {
+            for c1 in 'A'..='Z' {
+                for c2 in 'A'..='Z' {
                     let s = format!("{}{}", c1, c2);
                     if !index.contains(&s) {
                         e.hint = s.clone();
@@ -255,9 +255,9 @@ fn create_hints(elements: &[UiElement]) -> Vec<Hint> {
                 }
             }
             //go through every combination of 3 letters
-            for c1 in 'A'..'Z' {
-                for c2 in 'A'..'Z' {
-                    for c3 in 'A'..'Z' {
+            for c1 in 'A'..='Z' {
+                for c2 in 'A'..='Z' {
+                    for c3 in 'A'..='Z' {
                         let s = format!("{}{}{}", c1, c2, c3);
                         if !index.contains(&s) {
                             e.hint = s.clone();
@@ -331,7 +331,7 @@ fn get_accessibility(debug: bool, show_taskbar: bool) -> impl AccessibilityCalls
 }
 
 ///exact hints first, then fuzzy
-fn do_matching(hints: &Vec<Hint>, inp: String) -> Vec<&Hint> {
+fn do_matching(hints: &[Hint], inp: String) -> Vec<&Hint> {
     if inp.is_empty() {
         return hints.iter().to_vec();
     }

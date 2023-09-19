@@ -19,9 +19,11 @@ Select elements with `arrow keys` or `space+j/k`
 Press `enter` to click the selected element  
 Press `ctrl+enter` to right click the selected element  
 
-## Notes
-- Browsers typically have thousands of elements, so they take longer. It is recommended to rather use a similar tool made for them e.g. Vimium
+## Note
+- Browsers typically have thousands of elements, so they take longer. It is recommended to rather use a similar tool made specifically for browsers e.g. Vimium
 - Not all elements are made visible.
+- Clicks don't always work.
+- This is very early release, so there may be issues. *Use at your own risk*. Report any issues you find.
 
 ## Functionality
 - [x] Left and right click
