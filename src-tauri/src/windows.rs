@@ -40,7 +40,10 @@ impl AccessibilityCalls for Windows {
             let elements = get_elements_pid(topmost.pid, self.debug);
             result.extend(elements.iter().map(|a| {
                 let mut el = UiElement::from(a);
-                el.parent = topmost.name.clone();
+                el.parent = topmost
+                    .name
+                    .replace(|a: char| !(a.is_alphanumeric() || a.is_whitespace()), "")
+                    .clone();
                 el
             }));
             println!(
@@ -48,12 +51,13 @@ impl AccessibilityCalls for Windows {
                 elements.len(),
                 start.elapsed().as_millis()
             );
+            self.elements.extend(elements);
         }
 
         //get from taskbar
         if self.show_taskbar {
-            let taskbarelements = get_elements_taskbar();
-            result.extend(taskbarelements.iter().map(|a| {
+            let elements = get_elements_taskbar();
+            result.extend(elements.iter().map(|a| {
                 let mut el = UiElement::from(a);
                 el.parent = "taskbar".into();
                 el
@@ -61,9 +65,10 @@ impl AccessibilityCalls for Windows {
 
             println!(
                 "got {} taskbar elements in {}ms",
-                taskbarelements.len(),
+                elements.len(),
                 start.elapsed().as_millis()
             );
+            self.elements.extend(elements);
         }
 
         let uivec = result
@@ -91,7 +96,14 @@ impl AccessibilityCalls for Windows {
         if let Some(ele) = ele {
             invoke_element(ele, action);
         } else {
-            println!("no element found for {:?}", element);
+            println!(
+                "no element found for {:?} out of {} elements",
+                element,
+                self.elements.len()
+            );
+            for ele in self.elements.iter() {
+                println!("element: {:?}", UiElement::from(ele));
+            }
         }
         println!("invoked in {}ms", start.elapsed().as_millis());
     }
@@ -122,10 +134,13 @@ fn invoke_element(ele: &UIElement, action: Action) {
         rect.get_left() + rect.get_width() / 2,
         rect.get_top() + rect.get_height() / 2,
     );
+    //let pos = ele.get_clickable_point().unwrap().unwrap();
+
     mouse.move_to(pos).unwrap();
     match action {
         Action::LeftClick => {
-            ele.click().unwrap();
+            mouse.click(pos).unwrap();
+            //ele.click().unwrap();
         }
         Action::RightClick => ele.right_click().unwrap(),
     }

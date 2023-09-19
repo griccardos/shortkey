@@ -152,9 +152,6 @@ fn hide(app: AppHandle) {
 
 #[tauri::command]
 fn show(state: tauri::State<Mutex<AppState>>, app: AppHandle) {
-    // let a = windows::test();
-    // println!("a: {:?}", a);
-
     let state = state.lock().unwrap();
     state.sender.send(Message::SaveTopmost).unwrap();
 
@@ -171,8 +168,10 @@ fn show(state: tauri::State<Mutex<AppState>>, app: AppHandle) {
 
 ///full screen for hints
 fn set_full_size(window: &Window) {
+    eprintln!("setting full size");
     let monitor = window.current_monitor().unwrap().unwrap();
     let size = monitor.size();
+    window.hide().unwrap();
     window
         .set_size(Size::Physical(PhysicalSize {
             width: size.width,
@@ -182,6 +181,7 @@ fn set_full_size(window: &Window) {
     window
         .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
         .unwrap();
+    window.show().unwrap();
 }
 
 ///size for only output
@@ -299,6 +299,8 @@ fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
                     hints = create_hints(&elements);
                     let app = app.as_ref().unwrap();
                     app.trigger_global("go_full", None);
+
+                    //std::thread::sleep(Duration::from_millis(100)); //wait for results
                     app.emit_all("update_results", hints.iter().collect::<Vec<&Hint>>())
                         .unwrap();
                 }
