@@ -1,59 +1,62 @@
-use std::{cell::Cell, fmt::Display, sync::atomic::AtomicBool};
+use std::{cell::Cell, fmt::Display, time::Instant};
 
-use accessibility::{
-    AXAttribute, AXUIElement, AXUIElementAttributes, TreeVisitor, TreeWalkerFlow,
-};
+use accessibility::{AXAttribute, AXUIElement, AXUIElementAttributes, TreeVisitor, TreeWalkerFlow};
 use active_win_pos_rs::get_active_window;
-use core_foundation::{
-    base::CFType,
-    string::CFString,
-};
-use sysinfo::{PidExt, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
+use core_foundation::{base::CFType, string::CFString};
 
 use crate::traits::{AccessibilityCalls, Action, UiElement};
 
 pub struct Osx {
-    topmost_pid: Option<i32>,
-    dock_pid: Option<i32>,
-    child_pids: Vec<i32>,
+    topmost: Option<Parent>,
+    _dock_pid: Option<i32>,
+}
+
+#[derive(Default, Debug, Clone)]
+struct Parent {
+    name: String,
+    pid: i32,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
 }
 
 impl Osx {
     pub fn new() -> Self {
         Self {
-            topmost_pid: None,
-            dock_pid: None,
-            child_pids: vec![],
+            topmost: None,
+            _dock_pid: None,
         }
     }
 }
 impl AccessibilityCalls for Osx {
-    fn get_elements(&self) -> Vec<UiElement> {
+    fn get_elements(&mut self) -> Vec<UiElement> {
+        let start = Instant::now();
         let mut elements = vec![];
 
-        //first get dock
-        if let Some(pid) = self.dock_pid {
-            let dockvisitor = DockVisitor::new();
+        //TODO: once we can overlay on the dock, we can add this back
+        /*        //first get dock
+                if let Some(pid) = self.dock_pid {
+                    let dockvisitor = DockVisitor::new();
 
-            let els = accessibility::ui_element::AXUIElement::application(pid);
-            let walker = accessibility::TreeWalker::new();
+                    let els = accessibility::ui_element::AXUIElement::application(pid);
+                    let walker = accessibility::TreeWalker::new();
 
-            walker.walk(&els, &dockvisitor);
-            elements.extend(dockvisitor.elements.take());
-            //SHIFT TO RIGHT OF DOCK
-            elements.iter_mut().for_each(|e: &mut UiElement| {
-                e.x_offset = 50;
-            });
-        }
-
-        if self.topmost_pid.is_none() {
+                    walker.walk(&els, &dockvisitor);
+                    elements.extend(dockvisitor.elements.take());
+                    //SHIFT TO RIGHT OF DOCK
+                    elements.iter_mut().for_each(|e: &mut UiElement| {
+                        e.x_offset = 50;
+                    });
+                }
+        */
+        if self.topmost.is_none() {
             return elements;
         }
 
-        let visitor = MyVisitor::new();
+        let visitor = MyVisitor::new(self.topmost.clone().unwrap());
         //let root = accessibility::ui_element::AXUIElement::system_wide();
-        let mut pids = vec![self.topmost_pid.unwrap_or_default()];
-        pids.extend(self.child_pids.to_vec());
+        let pids = vec![self.topmost.as_ref().unwrap().pid];
         for pid in pids {
             let els = accessibility::ui_element::AXUIElement::application(pid);
             let walker = accessibility::TreeWalker::new();
@@ -61,19 +64,29 @@ impl AccessibilityCalls for Osx {
             walker.walk(&els, &visitor);
         }
         elements.extend(visitor.elements.take());
+        println!(
+            "found {} in {}ms",
+            elements.len(),
+            start.elapsed().as_millis()
+        );
+
+        elements
+            .iter_mut()
+            .for_each(|a| a.parent = self.topmost.as_ref().unwrap().name.clone());
 
         elements
     }
 
     fn invoke(&self, element: &UiElement, action: Action) {
-        let element1 = element.clone();
         //check if in dock
-        let els = accessibility::ui_element::AXUIElement::application(self.dock_pid.unwrap());
+        /* let els = accessibility::ui_element::AXUIElement::application(self.dock_pid.unwrap());
+        let element1 = element.clone();
+
         if let Some(ele) = accessibility::ElementFinder::new(
             move |f| {
                 let a: UiElement = f.into();
                 a.name == element1.name
-                    && a.class == element1.class
+                    && a.control == element1.control
                     && a.x == element1.x
                     && a.y == element1.y
             },
@@ -85,16 +98,17 @@ impl AccessibilityCalls for Osx {
                 Action::LeftClick => ele.perform_action(&CFString::new("AXPress")),
                 Action::RightClick => ele.perform_action(&CFString::new("AXShowMenu")),
             };
-        }
+        }*/
         //else in window
 
-        let els = accessibility::ui_element::AXUIElement::application(self.topmost_pid.unwrap());
+        let els =
+            accessibility::ui_element::AXUIElement::application(self.topmost.as_ref().unwrap().pid);
         let element = element.clone();
-        if let Some(ele) = accessibility::ElementFinder::new(
+        if let Some(_) = accessibility::ElementFinder::new(
             move |f| {
                 let a: UiElement = f.into();
                 a.name == element.name
-                    && a.class == element.class
+                    && a.control == element.control
                     && a.x == element.x
                     && a.y == element.y
             },
@@ -102,15 +116,28 @@ impl AccessibilityCalls for Osx {
         )
         .find(&els)
         {
+            let x = element.x + element.width / 2;
+            let y = element.y + element.height / 2;
+            let mouse = mouce::Mouse::new();
+            let _ = mouse.move_to(x as usize, y as usize);
+
             let _ = match action {
-                Action::LeftClick => ele.perform_action(&CFString::new("AXPress")),
-                Action::RightClick => ele.perform_action(&CFString::new("AXShowMenu")),
+                Action::LeftClick => {
+                    //ele.perform_action(&CFString::new(left))
+                    let _ = mouse.click_button(&mouce::common::MouseButton::Left);
+                }
+                Action::RightClick => {
+                    //ele.perform_action(&CFString::new(right))},
+                    let _ = mouse.click_button(&mouce::common::MouseButton::Right);
+                }
             };
+        } else {
+            println!("Could not find element to invoke");
         }
     }
 
     fn save_topmost(&mut self) {
-        let sys = sysinfo::System::new_with_specifics(
+        /*let sys = sysinfo::System::new_with_specifics(
             RefreshKind::new().with_processes(ProcessRefreshKind::new().with_user()),
         );
         let procs = sys.processes();
@@ -118,15 +145,24 @@ impl AccessibilityCalls for Osx {
         //dock
         if let Some(dock) = procs.values().find(|a| a.name() == "Dock") {
             self.dock_pid = Some(dock.pid().as_u32() as i32);
-        }
+        }*/
 
         let win = get_active_window();
-        if let Ok(win) = win {
-            self.topmost_pid = Some(win.process_id as i32);
 
-            
-        }
-
+        self.topmost = if let Ok(win) = win {
+            let par = Parent {
+                name: win.app_name,
+                pid: win.process_id as i32,
+                x: win.position.x,
+                y: win.position.y,
+                width: win.position.width,
+                height: win.position.height,
+            };
+            println!("Topmost: {par:?}");
+            Some(par)
+        } else {
+            None
+        };
     }
 
     fn has_permissions(&self) -> bool {
@@ -137,56 +173,58 @@ impl AccessibilityCalls for Osx {
 struct MyVisitor {
     level: Cell<usize>,
     elements: Cell<Vec<UiElement>>,
-    found_window: AtomicBool, //we only want the first window (topmost)
+    root: Parent, //we only want the first window (topmost)
 }
 
 impl MyVisitor {
-    pub fn new() -> Self {
+    pub fn new(root: Parent) -> Self {
         Self {
             level: Cell::new(0),
             elements: Cell::new(vec![]),
-            found_window: AtomicBool::new(false),
+            root,
         }
     }
 }
 
 impl TreeVisitor for MyVisitor {
     fn enter_element(&self, element: &AXUIElement) -> TreeWalkerFlow {
-        self.level.replace(self.level.get() + 1);
+        //update level and sibling count
+        let new_level = self.level.get() + 1;
+        self.level.replace(new_level);
 
-       /* let role = get_control(element);
-        let title = get_name(element);
-        let indent = " ".repeat(self.level.get());
-        let pos = get_pos(element);
-        if title.contains("main.rs")
-            || AXUIElementDisplay(element.clone())
-                .to_string()
-                .contains("main.rs")
-        {
-            println!["{indent} {:?}- {:?} {pos:?} ", title, role];
-        }*/
         if must_include(element) {
-            let uie: UiElement = element.into();
-            let mut old = self.elements.take();
-            old.push(uie);
-            self.elements.set(old);
-            
-            if !must_descend(element) {
-                return TreeWalkerFlow::SkipSubtree;
-            } else {
-                // let displ = AXUIElementDisplay(element.clone()).to_string();
-                // if displ.contains("main.rs") {
-                //     println!("Not descending into {displ}",);
-                // }
+            let mut uie: UiElement = element.into();
+
+            if uie.x as f64 >= self.root.x
+                && uie.x as f64 <= self.root.x + self.root.width
+                && uie.y as f64 >= self.root.y
+                && uie.y as f64 <= self.root.y + self.root.height
+            {
+                //for menu
+                if uie.control == "AXMenuBarItem" {
+                    uie.y_offset = 20;
+                }
+
+                let mut old = self.elements.take();
+                old.push(uie);
+                self.elements.set(old);
+
+                if !must_descend(element) {
+                    /*println!(
+                        "Not descending into {}",
+                        AXUIElementDisplay(element.clone())
+                    );*/
+                    return TreeWalkerFlow::SkipSubtree;
+                }
             }
         } else {
-            // let displ = AXUIElementDisplay(element.clone()).to_string();
+            //let displ = AXUIElementDisplay(element.clone()).to_string();
             // if displ.contains("main.rs") {
-            //     println!("not including {displ}",);
+            //  println!("not including {displ}",);
             // }
         }
 
-        if get_control(element) == "AXWindow" {
+        /* if get_control(element) == "AXWindow" {
             let found = self.found_window.load(std::sync::atomic::Ordering::Relaxed);
             if found {
                 return TreeWalkerFlow::SkipSubtree;
@@ -194,7 +232,7 @@ impl TreeVisitor for MyVisitor {
                 self.found_window
                     .swap(true, std::sync::atomic::Ordering::Relaxed);
             }
-        }
+        }*/
 
         TreeWalkerFlow::Continue
     }
@@ -206,14 +244,12 @@ impl TreeVisitor for MyVisitor {
 
 impl From<&AXUIElement> for UiElement {
     fn from(element: &AXUIElement) -> Self {
-
         let name = get_name(element);
-        let control = get_control(element);
+        let control = get_role(element);
         let pos = get_pos(element);
         let size = get_size(element);
 
         UiElement {
-            id: "".to_string(),
             name,
             x: pos.0,
             y: pos.1,
@@ -222,52 +258,48 @@ impl From<&AXUIElement> for UiElement {
             width: size.0,
             height: size.1,
             control,
-            item: "".to_string(), //value                .label_value()                .unwrap_or(CFString::from(""))                .to_string(),
-            class: "".to_string(),
             pid: 0,
             parent: "".to_string(),
         }
     }
 }
 
-fn get_control(element: &AXUIElement) -> String {
-    element
-        .role()
-        .unwrap_or(CFString::from("Unknown"))
-        .to_string()
-}
-
 fn must_include(element: &AXUIElement) -> bool {
     //return true;
     let mut incl = true;
     //only if we can left or right click
-    if let Ok(acts) = element.action_names() {
+    /* if let Ok(acts) = element.action_names() {
         incl &= acts
             .iter()
             .map(|a| a.to_string())
-            .filter(|a| a == "AXPress" || a == "AXShowMenu")
+            .filter(|a| get_left_actions().contains(a) || get_right_actions().contains(a))
             .count()
             > 0;
+    }*/
+    //  return incl;
+
+    let name = get_name(element).replace(|a: char| !(a.is_alphanumeric() || a.is_whitespace()), "");
+    if name.is_empty() {
+        // println!("Excluding {} with no name",AXUIElementDisplay(element.clone()));
+        return false;
     }
-    //return incl;
-
-    incl &= get_name(element).len() > 0; //only include if has text
 
     //return incl;
 
-    incl &= match element
-        .role()
-        .unwrap_or(CFString::from("Unknown"))
-        .to_string()
-        .as_str()
-    {
-         "AXStaticText" | "AXMenu" | "AXToolbar" | "AXApplication" | "AXWebArea"
-        | "AXTabGroup" | "AXOutline" | "AXHeading" => false,
+    incl &= match get_role(element).as_str() {
+        "AXApplication" => false,
+        "AXMenuItem" => false,
+        "AXWindow" => false,  //otherwise highlights entire window
+        "AXWebArea" => false, //otherwise highlights entire window for vscode
+        "AXOutline" => false, //otherwise highlights sidebar of finder
+        "AXGroup" => false,   //normally includes other items
+        "AXRow" => false,     //normally includes other items
 
-        "AXRow" | "AXGroup" //vscode uses these two for filelist
-        
-        | "AXButton" | "AXCheckBox" | "AXMenuItem" | "AXRadioButton"
-        | "AXPopUpButton" => true,
+        //  "AXStaticText" | "AXMenu" | "AXToolbar"  | "AXWebArea"
+        // | "AXTabGroup" | "AXOutline" | "AXHeading" => false,
+
+        // "AXRow" | "AXGroup" //vscode uses these two for filelist
+        "AXButton" | "AXCheckBox" | "AXRadioButton" | "AXPopUpButton" => true,
         _ => true,
     };
     incl
@@ -275,26 +307,43 @@ fn must_include(element: &AXUIElement) -> bool {
 
 fn must_descend(element: &AXUIElement) -> bool {
     let mut must = true;
-    let vis = if let Ok(vis) = element.visible_children() {
-        vis.len()
-    } else {
-        0
+
+    //if has visible children attribute, they must be visible
+    if let Ok(vis) = element.visible_children() {
+        must &= vis.len() > 0;
     };
-    must &= vis > 0;
 
     must
 }
 
 fn get_name(element: &AXUIElement) -> String {
-    let title = element.title().unwrap_or(CFString::from("")).to_string();
     let desc = element
         .description()
         .unwrap_or(CFString::from(""))
         .to_string();
-    let text = if desc.is_empty() { title } else { desc };
-    text
+    if !desc.is_empty() {
+        return desc;
+    }
+    let title = element.title().unwrap_or(CFString::from("")).to_string();
+    if !title.is_empty() {
+        return title;
+    }
+
+    let role = get_role(element);
+    if ["AXTextField", "AXStaticText"].contains(&role.as_str()) {
+        if let Ok(val) = element.value() {
+            let val = to_contents(val);
+            if !val.is_empty() {
+                return val;
+            }
+        }
+    }
+    String::new()
 }
 
+fn get_role(element: &AXUIElement) -> String {
+    element.role().unwrap_or(CFString::from("")).to_string()
+}
 fn get_pos(element: &AXUIElement) -> (i32, i32) {
     let mut pos = (0, 0);
     if let Ok(pos2) = element.attribute(&AXAttribute::new(&CFString::new("AXPosition"))) {
@@ -303,7 +352,7 @@ fn get_pos(element: &AXUIElement) -> (i32, i32) {
     pos
 }
 
-fn get_size(element: &AXUIElement)->(i32,i32){
+fn get_size(element: &AXUIElement) -> (i32, i32) {
     let mut size = (0, 0);
     if let Ok(size2) = element.attribute(&AXAttribute::new(&CFString::new("AXSize"))) {
         size = to_size(size2);
@@ -344,6 +393,19 @@ fn to_size(cfstr: CFType) -> (i32, i32) {
 
     (x, y)
 }
+///HACK. TODO: find out how to convert CFType to contents
+fn to_contents(cfstr: CFType) -> String {
+    let a = format!("{cfstr:?}");
+    if let Some(xind) = a.find("contents =") {
+        let xafter = &a[xind + 12..];
+        if let Some(xend) = xafter.find("\"") {
+            if let Ok(x) = xafter[..xend].to_string().parse() {
+                return x;
+            }
+        }
+    }
+    return a;
+}
 
 struct AXUIElementDisplay(AXUIElement);
 
@@ -356,10 +418,10 @@ impl Display for AXUIElementDisplay {
         };
         writeln!(
             f,
-            "{} {} children - {}",
+            "name:{} role:'{}'  children - {}",
             get_name(&self.0),
+            get_role(&self.0),
             chil,
-            get_control(&self.0)
         )?;
         if let Ok(names) = self.0.attribute_names() {
             for name in names.into_iter() {

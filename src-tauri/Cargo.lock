@@ -1768,6 +1768,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mouce"
+version = "0.2.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a33d9a0d590ee3a1e11ee24e8d800ec22a613558d20d7a73c16ee73b4ae5b90"
+dependencies = [
+ "glob",
+]
+
+[[package]]
 name = "ndk"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2727,6 +2736,7 @@ dependencies = [
  "easier",
  "fuzzy-matcher",
  "macos-accessibility-client",
+ "mouce",
  "serde",
  "serde_json",
  "sysinfo",

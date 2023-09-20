@@ -291,7 +291,6 @@ fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
                 Message::UpdateInput(inp) => {
                     let app = app.as_ref().unwrap();
                     let matches = do_matching(&hints, inp);
-                    println!("matches: {}", matches.len());
                     app.emit_all("update_results", matches).unwrap();
                 }
                 Message::RequestHints => {
@@ -308,6 +307,7 @@ fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
                     println!("searching for {}", hid);
                     if let Some(hindex) = hints.iter().position(|h| h.hint == hid) {
                         let ele = &elements[hindex];
+                        println!("Found {}", ele.name);
                         auto.invoke(ele, action);
                     } else {
                         println!(
@@ -341,7 +341,7 @@ fn do_matching(hints: &[Hint], inp: String) -> Vec<&Hint> {
     //get 1 or 0 exact matches
     let exact_hints = hints
         .iter()
-        .filter(|h| h.hint == inp.to_uppercase())
+        .filter(|h| h.hint.starts_with(&inp.to_uppercase()))
         .map(|a| &a.hint)
         .to_hashset();
     let exact = hints
