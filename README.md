@@ -13,6 +13,7 @@ Useful for people with conditions that prevent full use of the mouse.
 - that one time where you don't want to reach for the mouse and think there must be another way. This. This is that way.
 
 ## Getting Started
+(OSX only) System Preferences > Security & Privacy > Privacy > Accessibilty and allow shortkey access
 Navigate to the window you want shortcuts on  
 Default shortcut to open the app is `alt+enter`  
 Select elements with `arrow keys` or `space+j/k`  
