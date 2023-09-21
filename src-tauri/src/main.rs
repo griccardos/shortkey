@@ -11,6 +11,7 @@ mod traits;
 use easier::prelude::*;
 use std::{
     collections::HashSet,
+    error::Error,
     sync::{
         mpsc::{Receiver, Sender},
         Mutex,
@@ -21,7 +22,7 @@ use std::{
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use serde::{Deserialize, Serialize};
 use tauri::{
-    AppHandle, CustomMenuItem, Manager, PhysicalPosition, PhysicalSize, Position, Size, State,
+    App, AppHandle, CustomMenuItem, Manager, PhysicalPosition, PhysicalSize, Position, Size, State,
     SystemTray, SystemTrayEvent, SystemTrayMenu, Window,
 };
 use traits::{AccessibilityCalls, Action, UiElement};
@@ -35,48 +36,49 @@ struct AppState {
 fn main() {
     println!("starting");
 
-    let tray = setup_system_tray();
-    let debug = true;
+    let debug = false;
     let show_taskbar = true;
     let (sender, rec) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         worker(rec, debug, show_taskbar);
     });
     let state = AppState {
-        input: "".to_string(),
+        input: String::new(),
         results: vec![],
         sender,
     };
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![update_input, choice, hide, show])
         .manage(Mutex::new(state))
-        .system_tray(tray)
+        .system_tray(setup_system_tray())
         .on_system_tray_event(handle_system_tray) // <- handling the system tray events
-        .setup(|app| {
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory); //dont show in dock
-                                                                           //listen to get fullscreen
-            let ah = app.app_handle();
-            app.listen_global("go_full", move |_event| {
-                if let Some(window) = ah.get_focused_window() {
-                    set_full_size(&window);
-                }
-            });
-
-            let state: State<Mutex<AppState>> = app.state();
-            let window = app.get_window("main").unwrap();
-            set_output_size(&window);
-
-            let state = state.lock().unwrap();
-            state
-                .sender
-                .send(Message::AppHandle(app.app_handle()))
-                .unwrap();
-
-            Ok(())
-        })
+        .setup(setup_tauri)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn setup_tauri(app: &mut App) -> Result<(), Box<dyn Error>> {
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory); //dont show in dock
+                                                                   //listen to get fullscreen
+    let ah = app.app_handle();
+    app.listen_global("go_full", move |_event| {
+        if let Some(window) = ah.get_focused_window() {
+            set_full_size(&window);
+        }
+    });
+
+    let state: State<Mutex<AppState>> = app.state();
+    let window = app.get_window("main").unwrap();
+    set_output_size(&window);
+
+    let state = state.lock().unwrap();
+    state
+        .sender
+        .send(Message::AppHandle(app.app_handle()))
+        .unwrap();
+
+    Ok(())
 }
 
 fn setup_system_tray() -> SystemTray {
@@ -169,9 +171,10 @@ fn show(state: tauri::State<Mutex<AppState>>, app: AppHandle) {
 
 ///full screen for hints
 fn set_full_size(window: &Window) {
-    eprintln!("setting full size");
     let monitor = window.current_monitor().unwrap().unwrap();
     let size = monitor.size();
+    eprintln!("setting full size {size:?}");
+
     window.hide().unwrap();
     window
         .set_size(Size::Physical(PhysicalSize {
