@@ -12,6 +12,10 @@ Useful for people with conditions that prevent full use of the mouse.
 - those that want to make the most of their new ergonomic keyboard
 - that one time where you don't want to reach for the mouse and think there must be another way. This. This is that way.
 
+
+https://github.com/griccardos/shortkey/assets/30464685/bc5b0c69-b35a-4098-8583-ea0599d30181
+
+
 ## Getting Started
 (OSX only) System Preferences > Security & Privacy > Privacy > Accessibilty and allow shortkey access
 Navigate to the window you want shortcuts on  
