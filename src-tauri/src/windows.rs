@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, vec};
 
 use crate::traits::{AccessibilityCalls, Action, UiElement};
 use active_win_pos_rs::get_active_window;
@@ -180,20 +180,26 @@ fn get_elements_from_root(root_window: &UIElement, debug: bool) -> Vec<UIElement
      let vec2 = vec.lock().unwrap();
      vec2.clone()*/
     let els = auto.create_matcher().from(root_window.clone()).find_all();
-    els.unwrap_or_default()
-        .into_iter()
-        .filter(|a| {
-            let incl = must_include(&a);
-            if let Ok(incl) = incl {
-                incl.0
-            } else if debug {
-                println!("excluding {} because {:?}", UI2(a.clone()), incl);
-                false
-            } else {
-                false
-            }
-        })
-        .collect()
+    match els {
+        Ok(els) => els
+            .into_iter()
+            .filter(|a| {
+                let incl = must_include(&a);
+                if let Ok(incl) = incl {
+                    incl.0
+                } else if debug {
+                    println!("excluding {} because {:?}", UI2(a.clone()), incl);
+                    false
+                } else {
+                    false
+                }
+            })
+            .collect(),
+        Err(err) => {
+            println!("Error finding els: {:?}", err);
+            vec![]
+        }
+    }
 }
 fn get_elements_pid(pid: i32, debug: bool) -> Vec<UIElement> {
     let auto = UIAutomation::new().unwrap();

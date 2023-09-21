@@ -25,13 +25,21 @@ Press `ctrl+enter` to right click the selected element
 - Clicks don't always work.
 - This is very early release, so there may be issues. *Use at your own risk*. Report any issues you find.
 
-## Functionality
+
+
+## Functionality / Roadmap
 - [x] Left and right click
 - [x] Windows
 - [X] Mac
 - [ ] Linux
+- [ ] Customisable shortcuts
+- [ ] Options menu
 - [ ] Add a way to select type of elements you want visible
-- [ ] Make this customizable per application
+- [ ] Make type of elements customizable per application
 - [ ] Make showing taskbar elements optional
 - [ ] Optional colours, font sizes
 - [ ] Multi monitor testing
+- Code:
+    - [ ] Remove unwraps from code
+    - [ ] Add tests
+    - [ ] performance

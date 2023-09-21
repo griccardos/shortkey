@@ -36,7 +36,7 @@ fn main() {
     println!("starting");
 
     let tray = setup_system_tray();
-    let debug = false;
+    let debug = true;
     let show_taskbar = true;
     let (sender, rec) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -58,8 +58,9 @@ fn main() {
                                                                            //listen to get fullscreen
             let ah = app.app_handle();
             app.listen_global("go_full", move |_event| {
-                let window = ah.get_focused_window().unwrap();
-                set_full_size(&window);
+                if let Some(window) = ah.get_focused_window() {
+                    set_full_size(&window);
+                }
             });
 
             let state: State<Mutex<AppState>> = app.state();
@@ -299,7 +300,7 @@ fn worker(rec: Receiver<Message>, debug: bool, show_taskbar: bool) {
                     let app = app.as_ref().unwrap();
                     app.trigger_global("go_full", None);
 
-                    //std::thread::sleep(Duration::from_millis(100)); //wait for results
+                    std::thread::sleep(Duration::from_millis(100)); //HACK wait for fullscreen before send results
                     app.emit_all("update_results", hints.iter().collect::<Vec<&Hint>>())
                         .unwrap();
                 }

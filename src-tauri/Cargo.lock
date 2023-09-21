@@ -2728,7 +2728,7 @@ checksum = "a7cee0529a6d40f580e7a5e6c495c8fbfe21b7b52795ed4bb5e62cdf92bc6380"
 
 [[package]]
 name = "shortkey"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "accessibility",
  "active-win-pos-rs",

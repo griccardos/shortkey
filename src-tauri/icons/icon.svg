@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3 (0e150ed6c4, 2023-07-21)"
+   sodipodi:docname="icon.svg"
+   inkscape:export-filename="icon.png"
+   inkscape:export-xdpi="162.48595"
+   inkscape:export-ydpi="162.48595"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="1.0520974"
+     inkscape:cx="305.10483"
+     inkscape:cy="406.80644"
+     inkscape:window-width="1718"
+     inkscape:window-height="1368"
+     inkscape:window-x="365"
+     inkscape:window-y="20"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="matrix(0.96498182,0,0,1,-2.9121043,-20.87299)"
+     inkscape:export-filename="icon.png"
+     inkscape:export-xdpi="162.36322"
+     inkscape:export-ydpi="162.36322">
+    <rect
+       style="fill:none;fill-opacity:0;stroke:none;stroke-width:3.92401;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.6;stroke-dasharray:none;stroke-opacity:1"
+       id="rect23"
+       width="160.19391"
+       height="160.19391"
+       x="3.0177815"
+       y="20.87299" />
+    <g
+       id="g23"
+       transform="translate(3.1272936,-0.50296357)">
+      <path
+         style="fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:3.92401;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.6;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+         d="m 40.329378,131.52498 -1.893215,20.37003 h 85.755297 l -1.75059,-18.98776"
+         id="path2"
+         sodipodi:nodetypes="cccc" />
+      <path
+         style="fill:#ffff00;fill-opacity:1;stroke:#000000;stroke-width:9.62503;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.6;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+         d="M 40.278669,131.77645 H 5.5741827 V 57.589328 H 15.884936 c 0,0 21.441884,7.868056 64.630816,7.544454 43.234868,-0.323946 68.151558,-7.795936 68.151558,-7.795936 l 9.74391,0 1e-5,74.187124 h -35.39506 -17.85521 z"
+         id="path1"
+         sodipodi:nodetypes="ccccscccccc" />
+      <text
+         xml:space="preserve"
+         style="font-size:50.8px;line-height:0.3;font-family:'Bauhaus 93';-inkscape-font-specification:'Bauhaus 93, ';display:none;fill:#ffff00;fill-opacity:1;stroke:#000000;stroke-width:2.224;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.6;stroke-dasharray:none;stroke-opacity:1"
+         x="43.12962"
+         y="116.31944"
+         id="text23"><tspan
+           id="tspan23"
+           style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:50.8px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke-width:2.224;stroke-dasharray:none"
+           x="0"
+           y="0"
+           sodipodi:role="line">SK</tspan></text>
+    </g>
+  </g>
+</svg>
