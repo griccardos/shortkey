@@ -1,6 +1,6 @@
 # Shortkey
 
-Limit the use of the mouse, but using keyboard shortcuts to access points of interest on the screen. This application allows you to click button like elements on the screen using a shortcut without having to use the mouse for that one click.
+Limit the use of the mouse by using keyboard shortcuts to access points of interest on the screen. This application allows you to click button like elements on the screen using a shortcut without having to use the mouse for that one click.
 
 Similar to using alt to access the menu bar, this application allows you to access other elements on the screen using a shortcut.
 
@@ -44,7 +44,8 @@ Press `ctrl+enter` to right click the selected element
 - [ ] Make showing taskbar elements optional
 - [ ] Optional colours, font sizes
 - [ ] Multi monitor testing
-- Code:
+- [ ] Non element clicking
+- Code improvements:
     - [ ] Remove unwraps from code
     - [ ] Add tests
     - [ ] performance
