@@ -12,8 +12,12 @@ Useful for people with conditions that prevent full use of the mouse.
 - those that want to make the most of their new ergonomic keyboard
 - that one time where you don't want to reach for the mouse and think there must be another way. This. This is that way.
 
+![screen](https://github.com/griccardos/shortkey/assets/30464685/00cdce17-75ca-4ec3-83cf-9382bdb5c303)
 
-https://github.com/griccardos/shortkey/assets/30464685/bc5b0c69-b35a-4098-8583-ea0599d30181
+
+https://github.com/griccardos/shortkey/assets/30464685/48292b3f-48ee-46b8-a334-057b12b1a9bb
+
+
 
 
 ## Getting Started
