@@ -15,10 +15,10 @@ pub struct Osx {
 struct Parent {
     name: String,
     pid: i32,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
 }
 
 impl Osx {
@@ -153,10 +153,10 @@ impl AccessibilityCalls for Osx {
             let par = Parent {
                 name: win.app_name,
                 pid: win.process_id as i32,
-                x: win.position.x,
-                y: win.position.y,
-                width: win.position.width,
-                height: win.position.height,
+                x: win.position.x as i32,
+                y: win.position.y as i32,
+                width: win.position.width as i32,
+                height: win.position.height as i32,
             };
             println!("Topmost: {par:?}");
             Some(par)
@@ -188,34 +188,34 @@ impl MyVisitor {
 
 impl TreeVisitor for MyVisitor {
     fn enter_element(&self, element: &AXUIElement) -> TreeWalkerFlow {
-        //update level and sibling count
+        //update level
         let new_level = self.level.get() + 1;
         self.level.replace(new_level);
 
-        if must_include(element) {
-            let mut uie: UiElement = element.into();
+        if let Some(mut uie) = must_include(
+            element,
+            self.root.x,
+            self.root.y,
+            self.root.width,
+            self.root.height,
+        ) {
+            //let mut uie: UiElement = element.into();
 
-            if uie.x as f64 >= self.root.x
-                && uie.x as f64 <= self.root.x + self.root.width
-                && uie.y as f64 >= self.root.y
-                && uie.y as f64 <= self.root.y + self.root.height
-            {
-                //for menu
-                if uie.control == "AXMenuBarItem" {
-                    uie.y_offset = 20;
-                }
+            //for menu
+            if uie.control == "AXMenuBarItem" {
+                uie.y_offset = 20;
+            }
 
-                let mut old = self.elements.take();
-                old.push(uie);
-                self.elements.set(old);
+            let mut old = self.elements.take();
+            old.push(uie);
+            self.elements.set(old);
 
-                if !must_descend(element) {
-                    /*println!(
-                        "Not descending into {}",
-                        AXUIElementDisplay(element.clone())
-                    );*/
-                    return TreeWalkerFlow::SkipSubtree;
-                }
+            if !must_descend(element) {
+                /*println!(
+                    "Not descending into {}",
+                    AXUIElementDisplay(element.clone())
+                );*/
+                return TreeWalkerFlow::SkipSubtree;
             }
         } else {
             //let displ = AXUIElementDisplay(element.clone()).to_string();
@@ -242,10 +242,33 @@ impl TreeVisitor for MyVisitor {
     }
 }
 
+fn into_element(
+    element: &AXUIElement,
+    name: String,
+    role: String,
+    posx: i32,
+    posy: i32,
+) -> UiElement {
+    let size = get_size(element);
+
+    UiElement {
+        name,
+        x: posx,
+        y: posy,
+        x_offset: 0,
+        y_offset: 0,
+        width: size.0,
+        height: size.1,
+        control: role,
+        pid: 0,
+        parent: "".to_string(),
+    }
+}
+
 impl From<&AXUIElement> for UiElement {
     fn from(element: &AXUIElement) -> Self {
-        let name = get_name(element);
         let control = get_role(element);
+        let name = get_name(element);
         let pos = get_pos(element);
         let size = get_size(element);
 
@@ -264,29 +287,15 @@ impl From<&AXUIElement> for UiElement {
     }
 }
 
-fn must_include(element: &AXUIElement) -> bool {
-    //return true;
-    let mut incl = true;
-    //only if we can left or right click
-    /* if let Ok(acts) = element.action_names() {
-        incl &= acts
-            .iter()
-            .map(|a| a.to_string())
-            .filter(|a| get_left_actions().contains(a) || get_right_actions().contains(a))
-            .count()
-            > 0;
-    }*/
-    //  return incl;
-
-    let name = get_name(element).replace(|a: char| !(a.is_alphanumeric() || a.is_whitespace()), "");
-    if name.is_empty() {
-        // println!("Excluding {} with no name",AXUIElementDisplay(element.clone()));
-        return false;
-    }
-
-    //return incl;
-
-    incl &= match get_role(element).as_str() {
+fn must_include(
+    element: &AXUIElement,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Option<UiElement> {
+    let role = get_role(element);
+    let valid_role = match role.as_str() {
         "AXApplication" => false,
         "AXMenuItem" => false,
         "AXWindow" => false,  //otherwise highlights entire window
@@ -302,7 +311,25 @@ fn must_include(element: &AXUIElement) -> bool {
         "AXButton" | "AXCheckBox" | "AXRadioButton" | "AXPopUpButton" => true,
         _ => true,
     };
-    incl
+    if !valid_role {
+        return None;
+    }
+
+    let name = get_name(element).replace(|a: char| !(a.is_alphanumeric() || a.is_whitespace()), "");
+    if name.is_empty() {
+        // println!("Excluding {} with no name",AXUIElementDisplay(element.clone()));
+        return None;
+    }
+    //check bounds
+    let (posx, posy) = get_pos(element);
+    let in_bounds = role == "AXMenuBarItem"
+        || (posx >= x && posx <= x + width && posy >= y && posy <= y + height);
+
+    if !in_bounds {
+        return None;
+    }
+
+    Some(into_element(element, name, role, posx, posy))
 }
 
 fn must_descend(element: &AXUIElement) -> bool {
@@ -328,7 +355,6 @@ fn get_name(element: &AXUIElement) -> String {
     if !title.is_empty() {
         return title;
     }
-
     let role = get_role(element);
     if ["AXTextField", "AXStaticText"].contains(&role.as_str()) {
         if let Ok(val) = element.value() {
@@ -393,18 +419,13 @@ fn to_size(cfstr: CFType) -> (i32, i32) {
 
     (x, y)
 }
-///HACK. TODO: find out how to convert CFType to contents
 fn to_contents(cfstr: CFType) -> String {
-    let a = format!("{cfstr:?}");
-    if let Some(xind) = a.find("contents =") {
-        let xafter = &a[xind + 12..];
-        if let Some(xend) = xafter.find("\"") {
-            if let Ok(x) = xafter[..xend].to_string().parse() {
-                return x;
-            }
-        }
+    let temp: Option<CFString> = cfstr.downcast();
+    if let Some(str) = temp {
+        return str.to_string();
+    } else {
+        return String::new();
     }
-    return a;
 }
 
 struct AXUIElementDisplay(AXUIElement);
@@ -416,11 +437,12 @@ impl Display for AXUIElementDisplay {
         } else {
             0
         };
+        let role = get_role(&self.0);
         writeln!(
             f,
             "name:{} role:'{}'  children - {}",
             get_name(&self.0),
-            get_role(&self.0),
+            role,
             chil,
         )?;
         if let Ok(names) = self.0.attribute_names() {
